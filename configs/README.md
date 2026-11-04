@@ -21,10 +21,38 @@ lifetimes; see [the lifecycle contract](../docs/documentation-authority.md).
   freezes the old protocol. Both patches are retained; only code is evaluated.
   Existing frozen runs are not rebound by this addition.
 
+## RPG six-proposal Native subagent comparison
+
+[Learning](gepa_safe_pce_rpg_codex_subagents_diag6_v1_20261104.yaml) and
+[Supervisor](safe_pce_ace_rpg_codex_subagents_diag6_supervisor_v1_20261104.yaml)
+bind a fresh seed run to the completed pilot's Native coordinator: one isolated
+main Codex conversation per proposal, delegating reflection and history reading
+to subagents. Host retains Ref validation, counters and atomic ACE bookkeeping.
+The full file inventory has no required/optional reading split. This is not
+one conversation across iterations or one model call per proposal.
+
+The immutable Diag6 input package supplies the same 46/15/16 split and 92
+training-only reference files; it contains no historical training replay.
+No previous Plans, candidate, optimizer state or counter history is imported.
+Six proposals, mini 8/window 8, seed 42, cap10/48/96 tokens, gpt-6-sol/high,
+P/C/E prompts, official scoring and attempt budgets retain the reference design.
+Learning prompts match the completed subagent pilot; Refiner remains conditional.
+The pre-retry upper budget is 201 PCE slots, 603 no-model preparation units,
+six coordinator units and 48 internal case reports. The 12 main turns exclude
+variable Agent-chosen subagent calls and conditional Refiner calls.
+
+The independent Diag6 comparator stopped after four completed proposals.
+Only prefixes through proposal four can be compared at equal iteration counts;
+the final two proposals extend learning duration. Different runtime revisions
+and stochastic execution preclude treating a score difference as a causal
+estimate. See the [data contract](../docs/swe-rpg-learning-data.md#native-subagent-reference-comparison).
+Configuration preparation does not authorize execution. Use the shared
+Supervisor after explicit approval, a clean commit and fresh capacity checks.
+
 ## RPG autonomous-reading subagent pilot
 
 [Learning](gepa_safe_pce_rpg_codex_subagents_pilot1_v2_20261104.yaml) and
-[Supervisor](safe_pce_ace_rpg_codex_subagents_pilot1_supervisor_v2_20261104.yaml)
+[Archived Supervisor](archive/supervisor_launches/safe_pce_ace_rpg_codex_subagents_pilot1_supervisor_v2_20261104.yaml)
 bind one real GEPA proposal to the reference-enabled run's second eight-task
 training minibatch and its prior training history. Historical parent PCE and
 seed validation are replayed unchanged; old current Ref/Cur and candidate
@@ -52,6 +80,10 @@ retry policies and reference visibility are unchanged. Each run starts from
 the placeholder seed; no smoke or NoDiag outputs/counters are imported.
 The upper budget is 201 PCE slots, 603 no-model preparation elements, 48 Ref
 and six Cur calls before retries; Refiner remains conditional.
+The runtime stopped with four completed proposals; the six-proposal budget
+does not imply six completed iterations. The confirmed Controller aggregation
+OOM and subsequent shared fixes are documented in the
+[memory audit](../docs/knowledge/hpc-memory-accounting-20261013.md#safe-pce-replay-aggregation-measurement-2026-11-03).
 
 This is not an equal-budget six-proposal ablation against NoDiag three.
 Only its first three proposals provide an equal-iteration comparison with

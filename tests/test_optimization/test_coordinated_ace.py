@@ -279,6 +279,64 @@ def test_coordinator_request_survives_controller_ledger_commit(inputs, tmp_path,
     assert state in set(task_state_paths(config.run_dir))
 
 
+def test_fresh_coordinator_runs_multiple_gepa_proposals_and_resumes_without_relearning(tmp_path, monkeypatch):
+    """The formal path starts empty, carries training history, and never replays the pilot."""
+    config = _prepared(tmp_path)
+    config = replace(config, hybrid=replace(config.hybrid, learning_mode="codex_subagents",
+        curator_model={"executor": "codex_cli", "model": "gpt-6-sol", "reasoning_effort": "high"}))
+    from src.optimization.safe_pce_learning import SafePCEBackend
+    backend = SafePCEBackend(config)
+    train, validation = backend.load_snapshot()
+    train_ids = {case.instance_id for case in train}
+    validation_ids = {case.instance_id for case in validation}
+    assert not json.loads((config.dataset_snapshot / "manifest.json").read_text()).get("training_replay")
+    calls = []
+
+    def execute(effective, mode, cases, **kwargs):
+        calls.append([case.instance_id for case in cases])
+        return [_output(case.instance_id, "revision" in effective.planning_rules) for case in cases]
+
+    monkeypatch.setattr("src.optimization.safe_pce_learning.execute_pce", execute)
+
+    class Phases:
+        proposals = []
+
+        def call(self, role, payload):
+            assert role == "coordinator"  # No independent Ref/Cur calls.
+            index = len(self.proposals)
+            assert payload["proposal_index"] == index
+            rows = payload["records"]
+            assert len(rows) == 2
+            assert all(row["split"] == "train" and row["instance_id"] in train_ids for row in rows)
+            history = payload["ledger"]["history"]
+            if index == 0:
+                assert not history and not payload["ledger"]["reports"]
+            else:
+                assert history and payload["ledger"]["reports"]
+                assert {event["instance_id"] for event in history.values()} <= train_ids
+                assert not {event["instance_id"] for event in history.values()} & validation_ids
+            self.proposals.append(deepcopy(payload))
+            item = payload["parent"]["checklist"][0]
+            return {"reviews": [review(payload["parent"], row) for row in rows],
+                "curator_delta": {"reasoning": "Preserve reusable knowledge", "operations": [{
+                    "type": "UPDATE", "target_id": item["id"],
+                    "content": {"condition": item["condition"],
+                                "guide": f"Check independent evidence; revision {index + 1}."},
+                    "supporting_instance_ids": [rows[0]["instance_id"]]}]}}, []
+
+    phases = Phases()
+    result = run_hybrid_optimization(config, phase_executor=phases)
+    assert len(phases.proposals) == 3
+    assert result.val_aggregate_scores[0] == 0.0
+    assert max(result.val_aggregate_scores) == 1.0
+    ledger_path = config.run_dir / "global_counter_ledger.json"
+    ledger_before = ledger_path.read_bytes()
+    count = len(calls)
+    run_hybrid_optimization(config, phase_executor=phases)
+    assert len(calls) == count and len(phases.proposals) == 3
+    assert ledger_path.read_bytes() == ledger_before
+
+
 def test_historical_replay_real_gepa_calls_only_new_candidate_pce(tmp_path):
     from src.optimization.safe_pce_learning import SafePCEBackend
     (tmp_path / "source").mkdir()

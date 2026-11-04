@@ -266,6 +266,27 @@ up to eight new training PCE and fifteen conditional validation PCE executions
 are possible before retries. The 46 logical metric-slot ceiling also includes
 the 23 replayed parent/seed observations.
 
+### Fresh multi-proposal runs
+
+Fresh multi-proposal `codex_subagents` runs use the ordinary frozen task/split
+package without `training_replay`. Each proposal starts a new main conversation;
+only its reflection and curation turns share Native session state. Between
+proposals, knowledge flows through the existing candidate and training-only
+ACE ledger. Reusing an immutable input package does not import that package's
+previous run outputs: effective PCE run paths and job prefixes are overlaid
+with the new learning identity by the existing materializer.
+
+The RPG six-proposal binding is described in the
+[dataset contract](swe-rpg-learning-data.md#native-subagent-reference-comparison).
+The completed one-proposal pilot exercised delegation, same-session continuation,
+fresh candidate PCE and ledger finalization; it did not establish better learning.
+Its candidate tied the parent on all eight training outcomes, so the normal
+strict gate withheld candidate validation. Tool-output truncations required
+targeted rereads, and a retrospective test reference was mistaken for a test
+available before coding. These remain attribution and reading risks for
+post-run review. Completion is not proof of exhaustive reading, cap10 merge
+behavior, multi-iteration generalization or future Controller memory headroom.
+
 ## Dataset compatibility
 
 The registered backends are PolyBench, SWE-Verified and Python SWE-RPG. Dataset acquisition,

@@ -87,6 +87,22 @@ confirmed defect: it entered disposable repositories and could race cleanup.
 The shared fixed-depth status query passed a read-only remote check in 2.628 s
 after the fix; no model or new Slurm job was launched for that check.
 
+## Native subagent pilot measurement (2026-11-04)
+
+The completed `safe-pce-ace-rpg-codex-subagents-pilot1-v2-20261104` used the
+existing Iris 1 CPU/4G request. Its coordinated main/subagent Worker
+`6279924_0.batch` peaked at 710,804 K over 5m56s. The eight fresh candidate
+PCE Workers in array `6279959` completed with MaxRSS between 1,010,096 K and
+4,072,556 K. Sampled Controller slices `6279923.batch` and `6279973.batch`
+completed at 4,193,100 K and 4,193,120 K, close to the allocation ceiling.
+
+These are `sacct` peaks for the declared Slurm units, not per-subagent memory
+measurements. The pilot reused historical parent/seed observations and covered
+only one proposal. It validates neither six-proposal Controller headroom nor
+all future storage windows. A formal continuation retains the measured resource
+baseline unless separately approved; successful terminal states do not justify
+claiming ample memory margin.
+
 ## What consumes RAM
 
 Models execute remotely; these jobs do not load LLM weights locally. Memory

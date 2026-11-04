@@ -270,6 +270,40 @@ not new receipt gates or Host rewriting. See the
 for evidence limits; a small successful smoke does not certify all future
 storage windows, complete Agent reading, or generalization.
 
+## Native subagent reference comparison
+
+`configs/gepa_safe_pce_rpg_codex_subagents_diag6_v1_20261104.yaml` uses the
+completed Native subagent pilot's learning mode and prompts for six fresh
+proposals. One main Curator conversation delegates case reflection and
+evidence/history reading, then submits Ref reports followed by Curator
+operations in two turns. Existing Host validation, counter updates, four
+operations and conditional Refiner remain in place. Conversations are separate
+between proposals; no cross-iteration private session history is imported.
+
+The binding reuses the immutable original Diag6 task/source package, including
+the same 92 original training references. This package has no pilot replay;
+new outputs, candidates, ledger and optimizer state belong only to the new run.
+The 46 training, 15 validation and 16 downstream-test assignments, seed 42,
+mini 8/window 8, max10 items, 48/96-token limits, P/C/E prompts/models and
+official scoring are unchanged. Validation supplies selection evidence only;
+its Plans, trajectories, outcomes and references are not learning inputs.
+Planner and Coder still receive no original reference answers.
+
+The pre-retry PCE bound remains `15 + 6 × (8 + 8 + 15) = 201`, with at most
+603 no-model preparation units. Six coordinated learning units replace the
+48 separate Ref and six Cur units: they contain up to 48 case reports and
+12 main turns, plus a variable number of Agent-chosen subagent calls. Refiner
+remains conditional. A coordinator unit is not a single model invocation.
+
+The independent Diag6 runtime completed four proposals before stopping.
+Compare matched prefixes through proposal four, and treat proposals five and
+six as an extension. Neither run constitutes a repeated, equal-code causal
+estimate: runtime fixes and model stochasticity remain possible confounders.
+The historical pilot's unchanged eight-case outcome vector is workflow
+acceptance, not evidence of a learning gain. Retrospective references can
+describe tests introduced by the official patch; their presence in a report
+does not establish availability in the Planner's frozen repository.
+
 ## Training-diagnostic ablation
 
 The two-arm comparison concerns original retrospective diagnostic availability,
