@@ -67,14 +67,16 @@ def write_coordinator_evidence(root, payload, limits, prompts):
         records.append(index)
     atomic_json(root / "records.json", records)
     files = [{"path": str(path.relative_to(root)), "bytes": path.stat().st_size}
-             for path in sorted(root.rglob("*")) if path.is_file()]
-    # No mandatory/optional distinction: this is a complete navigation index.
-    atomic_json(root / "index.json", {
+             for path in sorted(root.rglob("*")) if path.is_file() and path.name != "manifest.json"]
+    # Reuse the Native SIF manifest path, without prescribing reading priority.
+    atomic_json(root / "manifest.json", {
         "schema_version": 1,
         "purpose": "Training evidence for autonomous subagent-assisted checklist learning",
         "entries": {
             "parent.json": "Current checklist and item identities",
-            "records.json": "Case references and exact field/body lookup paths",
+            "records.json": "Local case references and lossless field paths: planner_input is the decision-time task; "
+                            "pce_runs preserves Plans, Planner/Coder trajectories, patches and evaluator evidence; "
+                            "score summarizes recorded evaluator outcomes",
             "ledger.json": "Original prior training counter/history state",
             "history.json": "Prior attributions, original reports and artifact contexts",
             "limits.json": "Hard item-count and tokenizer-token limits",
@@ -95,7 +97,7 @@ def verify_coordinator_evidence(attempt_dir, payload, output, limits):
     second = json.loads((attempt_dir / "curator_response.json").read_text())
     if decode_phase_output("curator", second, cases, items) != output["curator_delta"]:
         raise ValueError("coordinator raw Curator output differs from canonical output")
-    index = json.loads((root / "index.json").read_text())
+    index = json.loads((root / "manifest.json").read_text())
     if "required_files" in index or "optional_files" in index:
         raise ValueError("coordinator inventory unexpectedly prescribes reading priority")
     for record, entry in zip(local["records"], json.loads((root / "records.json").read_text()), strict=True):
@@ -134,11 +136,11 @@ def run_coordinated_phase(config, payload, attempt_dir, *, retry_feedback="", co
         with conversation_factory(model_config=model, container=boundary, attempt_dir=attempt_dir) as session:
             try:
                 raw, first_trace = session.call_json(system=prompts["coordinator_task"],
-                    user="The file structure and complete inventory are in /evidence/index.json. "
+                    user="The file structure and complete inventory are in /evidence/manifest.json. "
                          "The current cases are indexed by /evidence/records.json. " + retry_feedback,
                     task="Delegate training-case analysis and history/counter reading to subagents. "
-                         "Collect the case reports. Return exactly {\"reviews\": [...]} with one "
-                         "Reflector report for each current case. Host will update bookkeeping before "
+                         "Collect the case reports. Return a JSON object containing only reviews, "
+                         "an array with one Reflector report for each current case. Host will update bookkeeping before "
                          "continuing this same Curator conversation.", output_filename="reviews_response.json")
                 trajectory.extend(first_trace)
                 last_raw = raw
@@ -161,19 +163,19 @@ def run_coordinated_phase(config, payload, attempt_dir, *, retry_feedback="", co
                 atomic_json(evidence / "parent.json", project_identities({"parent": counted_parent}, cases, items)["parent"])
                 atomic_json(evidence / "history.json", history)
                 atomic_json(evidence / "reviews.json", raw["reviews"])
-                index = json.loads((evidence / "index.json").read_text())
+                index = json.loads((evidence / "manifest.json").read_text())
                 index["entries"]["reviews.json"] = "Unchanged current reports accepted by Host"
                 index["files"] = [{"path": str(path.relative_to(evidence)), "bytes": path.stat().st_size}
                                   for path in sorted(evidence.rglob("*"))
-                                  if path.is_file() and path.name != "index.json"]
-                atomic_json(evidence / "index.json", index)
+                                  if path.is_file() and path.name != "manifest.json"]
+                atomic_json(evidence / "manifest.json", index)
                 delta, second_trace = session.call_json(system=prompts["coordinator_task"],
                     user="Host validated the reports and updated /evidence/parent.json counters and "
                          "/evidence/history.json using the existing ACE policy. /evidence/reviews.json "
                          "preserves your submitted reports. Continue in your Curator role; delegate "
                          "further evidence/history lookup as useful.",
                     task="Maintain the checklist using the Curator task in /evidence/roles.json. "
-                         "Return exactly reasoning and operations.", output_filename="curator_response.json")
+                         "Return a JSON object with exactly reasoning and operations.", output_filename="curator_response.json")
                 trajectory.extend(second_trace)
                 last_raw = delta
                 output = {"reviews": reviews,

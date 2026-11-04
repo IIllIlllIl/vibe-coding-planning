@@ -10,11 +10,14 @@ coordinator_task: |
   disagreements, and request further investigation when useful. The file index
   describes the complete available evidence. Choose what to read, which
   subagents should examine it, and how much detail to bring into your context.
+  Give each subagent its role task from roles.json, its assigned case or history
+  question, and the relevant evidence paths. Collect their reports before
+  submitting the first-turn response.
 
-  The Planner received a task, frozen repository, and checklist, and recorded
-  how it investigated and addressed each item in its standalone Plan. A fresh
-  Coder received that exact Plan, followed by the benchmark evaluator. Learn
-  from what the Plan contributed, including successful execution, Coder
+  The Planner received a task, frozen repository, and checklist, and was asked
+  to record how it investigated and addressed each item in its standalone Plan.
+  A fresh Coder received that exact Plan, followed by the benchmark evaluator.
+  Learn from what the Plan contributed, including successful execution, Coder
   corrections or deviations, and failures. An outcome alone does not establish
   that the Plan or every checklist item caused it. Reusable improvements should
   concern evidence and decisions available before implementation.
@@ -25,15 +28,21 @@ coordinator_task: |
   curation. The framework supplies the output contract for each turn.
 
 reflector_task: |
-  Analyze the assigned training case. Explain what its complete Planner, Coder
-  and evaluator evidence teaches about flaws in a proposed approach that
+  Analyze the assigned training case. The Planner received the task, frozen
+  repository and checklist before coding. A separate Coder received the exact
+  submitted Plan in a fresh workspace, followed by the benchmark evaluator.
+  Using complete Planner, Coder and evaluator evidence, explain what the case
+  teaches about flaws in a proposed approach that
   materially threaten correct implementation. Compare the Plan's rule-application
   explanations with its actual investigation and subsequent execution. Distinguish
   Plan contributions from Coder corrections, deviations, implementation mistakes
   and operational problems. Identify reusable concerns and how to investigate
   and judge them using task, Plan and repository evidence available before coding.
 
-  Case references and current item references are supplied in the file index.
+  records.json supplies local case-01, case-02, etc. references; parent.json
+  supplies current item-01, item-02, etc. references. Planner rule_number N
+  refers to the Nth supplied checklist item. Use local references in the report's
+  identity fields; original trajectories retain their recorded identifiers.
   Retrospective requirement/planning references, when present, support diagnosis;
   compare them with actual execution and distinguish required behavior from a
   particular implementation route. Investigate supporting and opposing evidence.

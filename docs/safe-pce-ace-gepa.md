@@ -219,6 +219,15 @@ It delegates case reflection and evidence/history reading to Native subagents,
 can request follow-up investigation, and integrates their findings. Original
 P/C/E and training-reference bytes remain available through existing lossless
 views and archives. The main Agent, not Host, chooses reading and delegation.
+The inventory uses `/evidence/manifest.json`, the same entry path required by
+the existing Native SIF preflight; a different reading policy does not require
+a second manifest filename. It contains paths, sizes and field meanings without
+`required_files` or `optional_files`. Delegated assignments carry their role
+task, case/history question and evidence paths. Local case/item references and
+the Planner's rule-number mapping are explicit; historical/raw identifiers stay
+unchanged. Acceptance tests connect this evidence producer to the actual Native
+preflight code, including manifest readability and same-session continuation;
+simulating a successful preflight independently cannot test that interface.
 
 One isolated conversation has two turns. It first submits one Ref report per
 training case. Host reuses the existing Ref validators, local-ID mapping,

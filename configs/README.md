@@ -23,8 +23,8 @@ lifetimes; see [the lifecycle contract](../docs/documentation-authority.md).
 
 ## RPG autonomous-reading subagent pilot
 
-[Learning](gepa_safe_pce_rpg_codex_subagents_pilot1_v1_20261104.yaml) and
-[Supervisor](safe_pce_ace_rpg_codex_subagents_pilot1_supervisor_v1_20261104.yaml)
+[Learning](gepa_safe_pce_rpg_codex_subagents_pilot1_v2_20261104.yaml) and
+[Supervisor](safe_pce_ace_rpg_codex_subagents_pilot1_supervisor_v2_20261104.yaml)
 bind one real GEPA proposal to the reference-enabled run's second eight-task
 training minibatch and its prior training history. Historical parent PCE and
 seed validation are replayed unchanged; old current Ref/Cur and candidate
@@ -35,6 +35,10 @@ This is a local learning-step comparison, not a new matched multi-iteration arm.
 The [coordinator contract](../docs/safe-pce-ace-gepa.md#native-subagent-coordinator)
 owns the evidence, counter and session boundaries. Configuration existence
 does not authorize execution.
+The v2 identity retains the same frozen inputs and budgets after correcting the
+Native manifest interface and delegated-role context. The [v1 learning binding](gepa_safe_pce_rpg_codex_subagents_pilot1_v1_20261104.yaml)
+and [archived launch](archive/supervisor_launches/safe_pce_ace_rpg_codex_subagents_pilot1_supervisor_v1_20261104.yaml)
+retain the failed pre-inference attempt's provenance; v2 does not reopen it.
 
 ## RPG six-proposal reference extension
 

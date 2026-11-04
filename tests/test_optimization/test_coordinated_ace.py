@@ -84,6 +84,86 @@ def inputs(tmp_path, monkeypatch):
     return config, {"parent": parent, "records": rows, "ledger": ledger.export()}
 
 
+@pytest.mark.parametrize("missing_manifest", [False, True])
+def test_generated_bundle_uses_native_preflight_contract(inputs, tmp_path, monkeypatch, missing_manifest):
+    """Exercise the real coordinator/transport/preflight wiring, not a stub phase.
+
+    Only Apptainer/CLI subprocesses are simulated. The production shell's
+    manifest-readability predicate runs against the generated evidence tree.
+    """
+    from types import SimpleNamespace
+    from src.optimization import codex_cli_runtime as runtime
+    config, payload = inputs
+    sif = tmp_path / "test.sif"
+    sif.write_bytes(b"test-only-image")
+    binary = tmp_path / "release/bin/codex"
+    binary.parent.mkdir(parents=True)
+    binary.write_bytes(b"test-only-binary")
+    resources = binary.parent.parent / "codex-resources"
+    resources.mkdir()
+    (resources / "bwrap").write_bytes(b"test-only-bwrap")
+    (resources / "bwrap").chmod(0o700)
+    auth = tmp_path / "auth.json"
+    auth.write_text('{"auth":"test-only"}')
+    config = replace(config, hybrid=replace(config.hybrid, curator_model={
+        **config.hybrid.curator_model, "codex_binary": str(binary),
+        "codex_auth_file": str(auth)}))
+    real_run = runtime.subprocess.run
+    checks, turns = [], []
+
+    def run(command, **kwargs):
+        assert command[:2] == ["apptainer", "exec"]
+        mounts = {command[i + 1].split(":")[1]: Path(command[i + 1].split(":")[0])
+                  for i, token in enumerate(command) if token == "--bind"}
+        root = mounts["/evidence"]
+        if "sif-python-probe" in command:
+            return SimpleNamespace(returncode=0, stdout=command[-2] + "\n", stderr="")
+        if command[-1] == "--version":
+            return SimpleNamespace(returncode=0, stdout=f"codex-cli {config.hybrid.curator_model['codex_version']}\n", stderr="")
+        if "sif-outer-isolation-probe" in command:
+            script = command[command.index("sif-outer-isolation-probe") - 1]
+            assert "test -r /evidence/manifest.json" in script
+            manifest = root / "manifest.json"
+            if missing_manifest:
+                manifest.unlink(missing_ok=True)
+            result = real_run(["/bin/sh", "-c", 'test -r "$1"', "readable-manifest", str(manifest)],
+                              capture_output=True, text=True, check=False)
+            checks.append(result.returncode)
+            return result
+        if "sandbox" in command:
+            return SimpleNamespace(returncode=0, stdout="TOOL_NETWORK_DENIED\n", stderr="")
+        assert "--ephemeral" not in command
+        assert "/evidence/manifest.json" in kwargs["input"] or "resume" in command
+        if turns:
+            assert command[command.index("resume") + 1] == "coordinator-thread"
+        turns.append(command)
+        manifest = json.loads((root / "manifest.json").read_text())
+        assert not {"required_files", "optional_files"} & manifest.keys()
+        assert all((root / entry["path"]).is_file() for entry in manifest["files"])
+        parent = json.loads((root / "parent.json").read_text())
+        if len(turns) == 1:
+            refs = json.loads((root / "records.json").read_text())
+            output = {"reviews": [review(parent, case) for case in refs]}
+        else:
+            assert parent["counters"][0]["helpful"] == 3
+            output = {"reasoning": "Keep evidence-backed knowledge", "operations": []}
+        filename = Path(command[command.index("--output-last-message") + 1]).name
+        (mounts["/agent-output"] / filename).write_text(json.dumps(output))
+        return SimpleNamespace(returncode=0, stdout='{"type":"thread.started","thread_id":"coordinator-thread"}\n', stderr="")
+
+    monkeypatch.setattr(runtime.subprocess, "run", run)
+    attempt = tmp_path / "attempt"
+    if missing_manifest:
+        with pytest.raises(runtime.CodexCLIError, match="outer SIF isolation preflight failed"):
+            module.run_coordinated_phase(config, payload, attempt)
+        assert checks == [1] and not turns
+    else:
+        output, _ = module.run_coordinated_phase(config, payload, attempt)
+        assert checks == [0, 0] and len(turns) == 2
+        assert not (attempt / "inputs/index.json").exists()
+        module.verify_coordinator_evidence(attempt, payload, output, hybrid_limits(config))
+
+
 def test_one_conversation_host_counters_and_complete_unprioritized_index(inputs, tmp_path):
     config, payload = inputs
     instances = []
@@ -96,7 +176,7 @@ def test_one_conversation_host_counters_and_complete_unprioritized_index(inputs,
         def __exit__(self, *args): pass
         def call_json(self, **kwargs):
             self.calls += 1
-            index = json.loads((self.root / "index.json").read_text())
+            index = json.loads((self.root / "manifest.json").read_text())
             assert "required_files" not in index and "optional_files" not in index
             if self.calls == 1:
                 parent = json.loads((self.root / "parent.json").read_text())
