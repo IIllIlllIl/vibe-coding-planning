@@ -196,10 +196,13 @@ def load_optimization_config(
     if type(hybrid.enabled) is not bool:
         raise ValueError("hybrid.enabled must be a boolean")
     if hybrid.enabled:
-        if hybrid.learning_mode not in {"independent", "codex_subagents"}:
-            raise ValueError("hybrid.learning_mode must be independent or codex_subagents")
-        if hybrid.learning_mode == "codex_subagents" and hybrid.curator_model.get("executor") != "codex_cli":
-            raise ValueError("codex_subagents requires a Native Codex Curator")
+        if hybrid.learning_mode not in {"independent", "codex_subagents", "codex_reflection"}:
+            raise ValueError("hybrid.learning_mode must be independent, codex_subagents or codex_reflection")
+        if hybrid.learning_mode in {"codex_subagents", "codex_reflection"} and hybrid.curator_model.get("executor") != "codex_cli":
+            raise ValueError(f"{hybrid.learning_mode} requires a Native Codex Curator")
+        if hybrid.learning_mode == "codex_reflection" and (not pce_learning or hybrid.refiner_enabled):
+            raise ValueError("codex_reflection requires Safe PCE semantics and refiner_enabled: false; "
+                             "complete candidates use the existing validation/retry contract")
         from src.optimization.behavioral_hybrid import HybridLimits
         HybridLimits(hybrid.max_items, hybrid.shared_guide_words,
                      hybrid.condition_words, hybrid.item_guide_words,
@@ -224,7 +227,8 @@ def load_optimization_config(
             key_models = []
             if not pce_learning and hybrid.checker_model.get("executor") != "codex_cli":
                 key_models.append(checker)
-            for role in ("reflector", "curator", "refiner"):
+            roles = ("curator",) if hybrid.learning_mode == "codex_reflection" else ("reflector", "curator", "refiner")
+            for role in roles:
                 if role == "refiner" and not hybrid.refiner_enabled:
                     continue
                 override = getattr(hybrid, f"{role}_model")
@@ -350,8 +354,10 @@ def load_optimization_config(
                          prompt_bundle_sha256=hashlib.sha256(bundle_bytes).hexdigest(),
                          evidence_sif_cache_dir=str(resolve(hybrid.evidence_sif_cache_dir)))
         hybrid_prompts = _mapping(yaml.safe_load(bundle_bytes), "hybrid prompts")
-        for key in (("reflector_task", "curator_task", "refiner_task") if pce_learning else
-                    ("checker_task", "checker_instance", "reflector_task", "curator_task")):
+        prompt_keys = (("reflection_task",) if hybrid.learning_mode == "codex_reflection" else
+                       (("reflector_task", "curator_task", "refiner_task") if pce_learning else
+                        ("checker_task", "checker_instance", "reflector_task", "curator_task")))
+        for key in prompt_keys:
             if not isinstance(hybrid_prompts.get(key), str) or not hybrid_prompts[key].strip():
                 raise ValueError(f"hybrid prompt {key} must be nonempty")
         if not pce_learning:

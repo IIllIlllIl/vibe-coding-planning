@@ -20,11 +20,31 @@ lifetimes; see [the lifecycle contract](../docs/documentation-authority.md).
   split_code_test_v1` when starting from a materialized config that already
   freezes the old protocol. Both patches are retained; only code is evaluated.
   Existing frozen runs are not rebound by this addition.
+- [Whole-candidate reflection](../docs/safe-pce-ace-gepa.md#whole-candidate-codex-reflection)
+  selects `hybrid.learning_mode: codex_reflection` and
+  [its task prompt](prompts/safe_pce_reflection_v1.yaml) while retaining the
+  existing checklist interface and Safe PCE / GEPA outer loop. It uses the
+  Native `curator_model` settings with `refiner_enabled: false`.
+
+## RPG whole-candidate reflection smoke
+
+[Learning](gepa_safe_pce_rpg_codex_reflection_smoke_v1_20261105.yaml) and
+[Supervisor](safe_pce_rpg_codex_reflection_smoke_supervisor_v1_20261105.yaml)
+reuse the completed reference smoke's immutable two-train/one-validation input
+package and four training-only reference files. One proposal, mini2/window1,
+seed42, cap10/48/96 tokens, full Codex/gpt-6-sol/high and Iris 1 CPU / 4G remain
+the smoke contract. Five to six fresh PCE slots and 15–18 preparation units are
+possible before retries/cache; one reflection Worker returns a complete
+candidate through the existing shared Worker/Supervisor. No prior outputs,
+ACE reports, candidate or counters are imported. This tests deployment and
+dataflow, rather than learning quality or an eight-case storage window.
+The [method contract](../docs/safe-pce-ace-gepa.md#whole-candidate-codex-reflection)
+defines the only learning change. Configuration presence is not authorization.
 
 ## RPG six-proposal Native subagent comparison
 
 [Learning](gepa_safe_pce_rpg_codex_subagents_diag6_v1_20261104.yaml) and
-[Supervisor](safe_pce_ace_rpg_codex_subagents_diag6_supervisor_v1_20261104.yaml)
+[Archived Supervisor](archive/supervisor_launches/safe_pce_ace_rpg_codex_subagents_diag6_supervisor_v1_20261104.yaml)
 bind a fresh seed run to the completed pilot's Native coordinator: one isolated
 main Codex conversation per proposal, delegating reflection and history reading
 to subagents. Host retains Ref validation, counters and atomic ACE bookkeeping.

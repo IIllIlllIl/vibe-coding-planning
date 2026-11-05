@@ -13,11 +13,10 @@ import yaml
 from src.agents.output_contract import AgentOutputContractError
 from src.optimization.agent_references import phase_references, decode_phase_output, project_identities
 from src.optimization.behavioral_hybrid_ace import _playbook, apply_hybrid_delta
-from src.optimization.behavioral_hybrid_evidence import _record_files
+from src.optimization.behavioral_hybrid_evidence import write_training_record_index
 from src.optimization.codex_cli_runtime import CodexConversation, CodexSIFExecution
 from src.optimization.hpc.task_batch import atomic_json
 from src.optimization.paired_playbook import validate_ace_paired_reflector_review
-from src.optimization.pce_reflector_evidence import pce_reflector_views
 from src.optimization.playbook_adapter import GlobalPlaybookCounters
 from src.optimization.audit import optional_diagnostic
 
@@ -50,22 +49,7 @@ def write_coordinator_evidence(root, payload, limits, prompts):
     atomic_json(root / "history.json", ledger.feedback_for(book, include_inactive=True))
     atomic_json(root / "limits.json", limits.agent_view())
     atomic_json(root / "roles.json", {key: prompts[key] for key in ("reflector_task", "curator_task", "reader_task")})
-    records = []
-    for number, record in enumerate(local["records"], 1):
-        index = _record_files(root, record, f"records/case-{number:02d}")
-        if record.get("task_semantics") == "safe_pce_resolution_v1":
-            views, view_index = pce_reflector_views(record, index["fields"]["pce_runs"],
-                                                  view_prefix=f"cases/case-{number:02d}/pce")
-            view_index["reference_format"] = (
-                "evidence_ref identifies a file and RFC 6901 JSON pointer into unchanged original data. "
-                "Behavior files index complete model messages and command events; referenced bodies remain available.")
-            # Different cases use distinct view namespaces; original archive
-            # pointers continue to address the exact original physical records.
-            for path, value in views.items():
-                atomic_json(root / path, value)
-            index["pce_evidence"] = view_index
-        records.append(index)
-    atomic_json(root / "records.json", records)
+    write_training_record_index(root, local["records"])
     files = [{"path": str(path.relative_to(root)), "bytes": path.stat().st_size}
              for path in sorted(root.rglob("*")) if path.is_file() and path.name != "manifest.json"]
     # Reuse the Native SIF manifest path, without prescribing reading priority.

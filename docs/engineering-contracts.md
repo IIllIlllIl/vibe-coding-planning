@@ -30,6 +30,11 @@ Host Ref-validation/counter/Cur boundary. It does not change generic Slurm
 submission, retry or checkpoint ownership. Evidence-reading priority is an
 experimental adapter choice, not a Supervisor policy; see the
 [coordinator contract](safe-pce-ace-gepa.md#native-subagent-coordinator).
+The opt-in [whole-candidate reflection](safe-pce-ace-gepa.md#whole-candidate-codex-reflection)
+arm replaces ACE's internal learning transaction with one Agent-authored full
+candidate. It reuses that same phase executor, Native boundary and lossless
+evidence writer; absence of ACE reports/counters is a declared method change,
+not permission to replace PCE, GEPA selection or generic recovery components.
 Do not introduce a second workflow/receipt framework to enforce this list.
 Host validation feedback is the next Agent's input. Live Slurm observations
 and durable task state drive recovery; the separate `slurm_status.json` copy is

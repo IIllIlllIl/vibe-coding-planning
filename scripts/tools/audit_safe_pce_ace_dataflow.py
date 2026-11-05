@@ -225,37 +225,45 @@ def audit(config_path):
             phases[role] += 1
             manual.append({"role": role, "completion": str(completion),
                            "required_files": manifest["required_files"]})
-    if config.hybrid.learning_mode == "codex_subagents":
+    if config.hybrid.learning_mode in {"codex_subagents", "codex_reflection"}:
         from src.optimization.coordinated_ace import verify_coordinator_evidence
+        from src.optimization.safe_pce_reflection import verify_reflection_evidence
         from src.optimization.behavioral_hybrid_runtime import hybrid_limits
-        phases["coordinator"] = 0
-        for path in sorted((root / "hpc_tasks/hybrid_coordinator").glob("*/outputs/task_*.json")):
+        role = "reflection" if config.hybrid.learning_mode == "codex_reflection" else "coordinator"
+        response = "candidate_response.json" if role == "reflection" else "curator_response.json"
+        verify = verify_reflection_evidence if role == "reflection" else verify_coordinator_evidence
+        phases[role] = 0
+        for path in sorted((root / f"hpc_tasks/hybrid_{role}").glob("*/outputs/task_*.json")):
             output = _json(path)
             payload = _json(path.parent.parent / "tasks" / path.name)["payload"]
             if output.get("status") != "completed":
-                raise ValueError("incomplete coordinator output")
-            validate_phase("coordinator", payload, output["agent_output"], config)
+                raise ValueError(f"incomplete {role} output")
+            validate_phase(role, payload, output["agent_output"], config)
             attempts = path.parent.parent / "attempts" / path.stem
             candidates = [attempt for attempt in sorted(attempts.glob("attempt_*"))
-                          if (attempt / "curator_response.json").is_file()]
+                          if (attempt / response).is_file()]
+            if role == "reflection":
+                candidates = [attempt for attempt in candidates
+                              if _json(attempt / response) == output["agent_output"]]
             if not candidates:
-                raise ValueError("coordinator raw completion is absent")
-            verify_coordinator_evidence(candidates[-1], payload, output["agent_output"], hybrid_limits(config))
+                raise ValueError(f"{role} raw completion is absent")
+            verify(candidates[-1], payload, output["agent_output"], hybrid_limits(config))
             for record in payload["records"]:
                 if record["instance_id"] not in train or record["split"] != "train":
-                    raise ValueError("non-training coordinator evidence")
-                _equal(record["planner_input"], sources[record["instance_id"]].agent_projection(), "source -> coordinator input")
+                    raise ValueError(f"non-training {role} evidence")
+                _equal(record["planner_input"], sources[record["instance_id"]].agent_projection(), f"source -> {role} input")
                 if any(run not in physical for run in record["pce_runs"]):
-                    raise ValueError("coordinator changed PCE evidence")
-            phases["coordinator"] += 1
-            manual.append({"role": "coordinator", "attempt": str(candidates[-1]),
+                    raise ValueError(f"{role} changed PCE evidence")
+            phases[role] += 1
+            manual.append({"role": role, "attempt": str(candidates[-1]),
                            "scope": "Native delegation, child traces, autonomous reading and retained uncertainty"})
-    if not phases.get("coordinator") and (not phases["reflector"] or not phases["curator"]):
+    if not (phases.get("coordinator") or phases.get("reflection")) and (not phases["reflector"] or not phases["curator"]):
         raise ValueError("learning phases missing")
-    ledger = _json(root / "global_counter_ledger.json")
-    for event in ledger["history"].values():
-        if event["instance_id"] not in train:
-            raise ValueError("non-training feedback entered the counter ledger")
+    if config.hybrid.learning_mode != "codex_reflection":
+        ledger = _json(root / "global_counter_ledger.json")
+        for event in ledger["history"].values():
+            if event["instance_id"] not in train:
+                raise ValueError("non-training feedback entered the counter ledger")
     for name in ("gepa_state.bin", "gepa_resume_state.json", "result.json"):
         if not (root / name).is_file():
             raise ValueError(f"missing terminal authority: {name}")

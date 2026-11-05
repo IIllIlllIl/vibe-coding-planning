@@ -22,6 +22,25 @@ def _record_files(root, record, prefix):
     ) if key in record}, "fields": fields}
 
 
+def write_training_record_index(root, records):
+    """Shared lossless case inventory for Native learning roles."""
+    indexes = []
+    for number, record in enumerate(records, 1):
+        index = _record_files(root, record, f"records/case-{number:02d}")
+        if record.get("task_semantics") == "safe_pce_resolution_v1":
+            views, view_index = pce_reflector_views(record, index["fields"]["pce_runs"],
+                                                  view_prefix=f"cases/case-{number:02d}/pce")
+            view_index["reference_format"] = (
+                "evidence_ref identifies a file and RFC 6901 JSON pointer into unchanged original data. "
+                "Behavior files index complete model messages and command events; referenced bodies remain available.")
+            for path, value in views.items():
+                atomic_json(root / path, value)
+            index["pce_evidence"] = view_index
+        indexes.append(index)
+    atomic_json(root / "records.json", indexes)
+    return indexes
+
+
 def write_hybrid_evidence(root: Path, role, payload, *, canonical_parent=None):
     """Separate mandatory learning evidence from lossless, indexed raw records.
 

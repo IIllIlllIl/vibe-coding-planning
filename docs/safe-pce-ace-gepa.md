@@ -210,6 +210,46 @@ and patch field. Missing learning evidence or incomplete physical repetitions
 cannot be hidden by a completed evaluator outcome. Raw observations are retained
 and comparison/learning is withheld.
 
+## Whole-candidate Codex reflection
+
+`hybrid.learning_mode: codex_reflection` changes only GEPA's proposal/reflection
+implementation. It uses the Native model settings in `hybrid.curator_model`,
+`configs/prompts/safe_pce_reflection_v1.yaml`, and `refiner_enabled: false`.
+One fresh Codex conversation returns a complete candidate per proposal. There
+are no prescribed Ref/Cur turns, subagent assignments, per-case review schema,
+helpful/harmful tags, supporting-ID lists or ADD/UPDATE/MERGE/REMOVE operations.
+Native delegation remains an available tool capability. The task describes
+the planning objective, available evidence, generalization/readability goals
+and the existing output/size constraints.
+
+The output remains the existing checklist JSON: `schema_version: 1` and items
+with `id`, `condition`, and `guide`. Existing item and token caps still apply;
+this arm relaxes the learning process, not the Planner's artifact interface.
+The Agent authors the full replacement; Host validates without repairing it.
+Invalid submissions receive concrete feedback through the same Worker retry.
+There is no separate Refiner or ACE ledger in this mode.
+
+The evidence bundle reuses the completed Native coordinator's lossless field
+splitting and PCE views. It supplies the parent and current training minibatch's
+exact tasks, Plans, complete P/C/E evidence, outcomes, and the same original
+training-only diagnostic references when configured. Its file inventory has
+no required/optional reading split. ACE-generated reports/counters/history do
+not exist in this arm; no wider history channel is added to compensate.
+Validation/test observations and run-root state are never mounted into the
+learning session. This compares a complete replacement proposal against ACE
+maintenance, rather than claiming identical intermediate learning inputs.
+
+Safe PCE materialization, effective Planner/Coder prompts and models, evaluator,
+scoring, isolation, retries, preparation/window scheduling, GEPA sampler,
+strict minibatch gate, candidate selection and checkpoints are unchanged.
+Reflection runs through `HybridPhaseExecutor` and the existing Worker and
+`SlurmTaskBatch`; the proposal ordinal pins its request for yield/resume.
+The maintained dataflow auditor understands this role without requiring an
+ACE ledger or adding a runtime audit gate. No-model acceptance covers actual
+GEPA proposals/resume and Native SIF preflight wiring; it is not live HPC or
+model-quality validation. A new experiment still needs a fresh frozen run
+identity, reviewed configuration and explicit launch authorization.
+
 ## Native subagent coordinator
 
 `hybrid.learning_mode: independent` remains the default completed-formal path.

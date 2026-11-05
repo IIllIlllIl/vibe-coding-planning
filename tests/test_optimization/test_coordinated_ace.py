@@ -85,7 +85,8 @@ def inputs(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("missing_manifest", [False, True])
-def test_generated_bundle_uses_native_preflight_contract(inputs, tmp_path, monkeypatch, missing_manifest):
+@pytest.mark.parametrize("learning_mode", ["codex_subagents", "codex_reflection"])
+def test_generated_bundle_uses_native_preflight_contract(inputs, tmp_path, monkeypatch, missing_manifest, learning_mode):
     """Exercise the real coordinator/transport/preflight wiring, not a stub phase.
 
     Only Apptainer/CLI subprocesses are simulated. The production shell's
@@ -94,6 +95,14 @@ def test_generated_bundle_uses_native_preflight_contract(inputs, tmp_path, monke
     from types import SimpleNamespace
     from src.optimization import codex_cli_runtime as runtime
     config, payload = inputs
+    if learning_mode == "codex_reflection":
+        config = replace(config, hybrid=replace(config.hybrid, learning_mode=learning_mode,
+            prompt_bundle="configs/prompts/safe_pce_reflection_v1.yaml", refiner_enabled=False))
+        payload = {key: value for key, value in payload.items() if key != "ledger"}
+        from src.optimization import safe_pce_reflection
+        run_phase, verify = safe_pce_reflection.run_reflection_phase, safe_pce_reflection.verify_reflection_evidence
+    else:
+        run_phase, verify = module.run_coordinated_phase, module.verify_coordinator_evidence
     sif = tmp_path / "test.sif"
     sif.write_bytes(b"test-only-image")
     binary = tmp_path / "release/bin/codex"
@@ -141,7 +150,9 @@ def test_generated_bundle_uses_native_preflight_contract(inputs, tmp_path, monke
         assert not {"required_files", "optional_files"} & manifest.keys()
         assert all((root / entry["path"]).is_file() for entry in manifest["files"])
         parent = json.loads((root / "parent.json").read_text())
-        if len(turns) == 1:
+        if learning_mode == "codex_reflection":
+            output = parent
+        elif len(turns) == 1:
             refs = json.loads((root / "records.json").read_text())
             output = {"reviews": [review(parent, case) for case in refs]}
         else:
@@ -155,13 +166,14 @@ def test_generated_bundle_uses_native_preflight_contract(inputs, tmp_path, monke
     attempt = tmp_path / "attempt"
     if missing_manifest:
         with pytest.raises(runtime.CodexCLIError, match="outer SIF isolation preflight failed"):
-            module.run_coordinated_phase(config, payload, attempt)
+            run_phase(config, payload, attempt)
         assert checks == [1] and not turns
     else:
-        output, _ = module.run_coordinated_phase(config, payload, attempt)
-        assert checks == [0, 0] and len(turns) == 2
+        output, _ = run_phase(config, payload, attempt)
+        expected_turns = 1 if learning_mode == "codex_reflection" else 2
+        assert checks == [0] * expected_turns and len(turns) == expected_turns
         assert not (attempt / "inputs/index.json").exists()
-        module.verify_coordinator_evidence(attempt, payload, output, hybrid_limits(config))
+        verify(attempt, payload, output, hybrid_limits(config))
 
 
 def test_one_conversation_host_counters_and_complete_unprioritized_index(inputs, tmp_path):

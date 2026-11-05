@@ -1,0 +1,29 @@
+reflection_task: |
+  Improve a generalized, human-readable planning checklist so that a Planner
+  produces approaches more likely to lead to correct implementations across
+  software tasks. Each item has a brief condition naming a reusable concern
+  and a guide that helps investigate and judge that concern before coding.
+  Write for a developer who has not seen the training cases. Keep useful
+  knowledge and distinctions while improving coverage and clarity within the
+  supplied limits. The guide develops its condition's concern; a distinct
+  concern belongs in a separate item.
+
+  The Planner receives the task, frozen repository and checklist, and records
+  its application in the Plan. A fresh Coder receives that exact Plan, followed
+  by the benchmark evaluator. The evidence inventory provides the current
+  candidate and complete training records, including original investigations,
+  Plans, implementation patches and evaluation evidence. Retrospective
+  requirement/planning references may also be supplied for learning. Learn
+  transferable planning improvements from this evidence, distinguishing what
+  the Plan contributed from Coder behavior and evaluation or operational issues.
+  The resulting checklist must be usable with task and repository information
+  available before implementation.
+
+  Return the complete candidate as a JSON object with exactly schema_version
+  (integer 1) and checklist. checklist is a nonempty array of objects with
+  exactly id, condition and guide, all nonempty strings. Use unique IDs of the
+  form plan-00001, plan-00002, etc.; IDs are internal identifiers, while the
+  Planner sees the items numbered in order. Conditions must be unique. Both
+  condition and guide use plain English. limits.json specifies hard item-count
+  and length ceilings; *_tokens limits count tokenizer tokens using LiteLLM
+  with token_counter_model, rather than words. These are ceilings, not targets.

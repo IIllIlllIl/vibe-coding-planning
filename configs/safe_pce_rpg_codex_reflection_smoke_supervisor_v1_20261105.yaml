@@ -1,0 +1,25 @@
+schema_version: 1
+session: safe-pce-rpg-codex-reflection-smoke-v1-20261105
+log: .local/hpc-supervisor/safe-pce-rpg-codex-reflection-smoke-v1-20261105.log
+arguments:
+- --poll-interval
+- '120'
+- --slice-time
+- 00:08:00
+- --state-file
+- .local/hpc-supervisor/safe-pce-rpg-codex-reflection-smoke-v1-20261105.json
+- --require-clean-worktree
+- --gepa-rules
+- --gepa-config
+- configs/gepa_safe_pce_rpg_codex_reflection_smoke_v1_20261105.yaml
+- --ulhpc-config
+- /Users/taoran.wang/.config/ulhpc-submit/config.yaml
+- --job-name
+- safe-pce-rpg-codex-reflection-smoke-v1-20261105
+- --cpus
+- '1'
+- --mem
+- 4G
+- --reclaim-staging
+- --reclaim-workspaces
+- --submit

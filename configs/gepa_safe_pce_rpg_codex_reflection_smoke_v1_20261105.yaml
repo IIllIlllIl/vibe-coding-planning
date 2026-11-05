@@ -1,0 +1,123 @@
+experiment_contract:
+  identity: gepa_safe_pce_rpg_codex_reflection_smoke_v1_20261105
+  purpose: one-proposal end-to-end acceptance of whole-candidate Codex reflection
+  engineering_baseline_config: configs/gepa_safe_pce_rpg_codex_subagents_diag6_v1_20261104.yaml
+  engineering_baseline_commit: 66e0e043b482213ddbe2f9e17a2bc4e7b910628c
+  smoke_input_baseline_config: configs/gepa_safe_pce_rpg_codex_diag_smoke_v1_20261102.yaml
+  objective: resolved_rate
+  development_only: true
+  metric_improvement_required: false
+  previous_output_import: false
+  start_policy: fresh_seed_no_replay_candidate_checkpoint_counter_or_output_import
+  selection: configs/frozen_safe_pce_ace/rpg_patch_smoke_v11_20261101/split-selection.json
+  source_case_membership: unchanged_development_cases_with_formal_split_membership_preserved
+  training_reference_diagnostics: same_four_original_training_only_files
+  diagnostic_manifest: configs/frozen_safe_pce_ace/rpg_diagnostics_train47_v1_20261025/manifest.json
+  learning_unit: one_fresh_codex_conversation_returning_complete_candidate
+  reading: complete_lossless_file_inventory_without_prescribed_reading_or_delegation
+  ace_reports_operations_and_counters: false
+  diagnostics_visibility: training_cases_in_reflection_evidence_only
+  planner_coder_validation_and_test_receive_diagnostics: false
+  pce_prompts_models_scoring_selection_and_policies_unchanged: true
+  code_submission_protocol: split_code_test_v1
+  pce_execution_window_cases: 1
+  maximum_prepared_phase_trees_per_window: 3
+  slurm_schedules_all_ready_array_elements: true
+  budget:
+    pce_evaluation_slots_without_cache:
+      minimum: 5
+      maximum: 6
+    preparation_elements_before_retries:
+      minimum: 15
+      maximum: 18
+    reflection_units: 1
+    native_subagent_calls: optional_Agent_choice
+    pce_task_attempts_including_initial: 3
+    learning_task_attempts_including_initial: 2
+  acceptance:
+  - unchanged_shared_supervisor_pce_worker_retry_checkpoint_and_gepa_selection
+  - original_training_references_and_complete_pce_evidence_losslessly_available
+  - validation_and_test_never_enter_reflection_inputs
+  - one_complete_agent_authored_candidate_without_host_repair_or_ace_operations
+  - existing_size_validation_and_specific_retry_feedback
+  - terminal_gepa_checkpoint_and_post_run_dataflow_audit
+  - manual_read_coverage_tool_truncation_and_behavior_review
+  interpretation: engineering_dataflow_acceptance_not_learning_quality_or_window8_capacity
+paths:
+  dataset_snapshot: output/SWE-RPG/safe-pce-ace-rpg-codex-diag-smoke-v1-20261102-inputs
+  safe_pce_config: output/SWE-RPG/safe-pce-ace-rpg-codex-diag-smoke-v1-20261102-inputs/pce_source/base_pce.yaml
+  initial_guideline: configs/prompts/safe_pce_hybrid_seed_v2.json
+  run_dir: output/SWE-RPG/safe-pce-rpg-codex-reflection-smoke-v1-20261105
+task:
+  semantics: safe_pce_resolution_v1
+reflection:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.0
+  max_steps: 100
+  cost_limit: 3.0
+  timeout: 1800
+hybrid:
+  enabled: true
+  max_items: 10
+  condition_tokens: 48
+  item_guide_tokens: 96
+  prompt_bundle: configs/prompts/safe_pce_reflection_v1.yaml
+  evidence_sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+  evidence_image: codex-inspection:python312-rg14-v1
+  evidence_sif_sha256: b383e57e939505cdd158205066e495f6e3ca7e9932000f1a1d3fe3e26a1f0277
+  dataset_file_sha256:
+    manifest.json: 6271ce0b13cbb05372ebbb5a210937f3bcb2f26c589b80a4d7c481edb8af522a
+    train.jsonl: 8711518a0e923897a2ff46f7d6890b34803b94c5470e1065e9d679c9baabdff0
+    validation.jsonl: f9ddc9383b8cca51774aa6b0c4195efc8505a70069e9d5801c9506a7ae379a05
+  curator_model:
+    executor: codex_cli
+    codex_binary: ${HOME}/.local/lib/vibe-codex/0.160.1/bin/codex
+    codex_auth_file: ${HOME}/.codex/auth.json
+    codex_version: 0.160.1
+    model: gpt-6-sol
+    reasoning_effort: high
+  refiner_enabled: false
+  shared_guide_enabled: false
+  learning_mode: codex_reflection
+search:
+  max_iterations: 1
+  max_metric_calls: 6
+  projection_metric_calls: 6
+  reflection_minibatch_size: 2
+  train_case_repetitions: 1
+  primary_metric: resolved_rate
+  parallel: 1
+  seed: 42
+  skip_perfect_score: false
+  min_proposals: 1
+docker:
+  workdir: /testbed
+  timeout: 30
+  min_free_gb: 20
+  max_cached_images: 75
+container:
+  runtime: none
+execution:
+  backend: hpc_slurm
+hpc:
+  submit: true
+  remote_project_dir: /scratch/users/${USER}/vibe-coding-planning/staging/gepa_safe_pce_rpg_codex_reflection_smoke_v1_20261105
+  remote_task_dir: /scratch/users/${USER}/vibe-coding-planning/run_state/hpc_tasks/gepa_safe_pce_rpg_codex_reflection_smoke_v1_20261105
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  ulhpc_config: configs/ulhpc_submit.yaml
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  time: 00:30:00
+  poll_interval_seconds: 120
+  task_output_grace_seconds: 300
+  missing_task_grace_seconds: 600
+  max_task_attempts: 2
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  python_bin: python3
+  job_name_prefix: gepa_safe_pce_rpg_codex_reflection_smoke_v1_20261105
+  worker_config_path: configs/gepa_safe_pce_rpg_codex_reflection_smoke_v1_20261105.yaml
+mode: safe_pce_hybrid_ace

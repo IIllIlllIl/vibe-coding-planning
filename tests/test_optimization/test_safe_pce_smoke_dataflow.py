@@ -49,8 +49,9 @@ def _prepared_verified(tmp_path):
 @pytest.mark.parametrize("persistent_output_link", [False, True])
 @pytest.mark.parametrize("metadata_failure", [False, True])
 @pytest.mark.parametrize("workspace_inventory_failure", [False, True])
+@pytest.mark.parametrize("learning_mode", ["independent", "codex_reflection"])
 def test_verified_end_to_end_and_audit_detects_lost_evidence(
-        tmp_path, monkeypatch, dataset_mode, persistent_output_link, metadata_failure, workspace_inventory_failure):
+        tmp_path, monkeypatch, dataset_mode, persistent_output_link, metadata_failure, workspace_inventory_failure, learning_mode):
     from src.optimization import behavioral_hybrid_runtime as runtime
     from src.optimization.hpc.task_batch import SlurmTaskBatch
     from src.optimization.behavioral_hybrid_worker import run_task as phase_worker
@@ -69,6 +70,12 @@ def test_verified_end_to_end_and_audit_detects_lost_evidence(
             pce_config=pce_path, selection={"train": ["owner__repo-1", "owner__repo-2"], "validation": ["owner__repo-3"]},
             snapshot=tmp_path / "learning-snapshot", run_dir=tmp_path / "run", output_config=path,
             max_iterations=1, minibatch_size=2, max_metric_calls=6)
+    if learning_mode == "codex_reflection":
+        raw = yaml.safe_load(path.read_text())
+        raw["hybrid"].update(learning_mode=learning_mode, refiner_enabled=False,
+            curator_model={"executor": "codex_cli", "model": "gpt-6-sol", "reasoning_effort": "high"},
+            prompt_bundle="configs/prompts/safe_pce_reflection_v1.yaml")
+        path.write_text(yaml.safe_dump(raw))
     if persistent_output_link:
         persistent = tmp_path / "run_state" / "output" / "dataset" / "smoke"
         persistent.mkdir(parents=True)
@@ -164,6 +171,21 @@ def test_verified_end_to_end_and_audit_detects_lost_evidence(
             "supporting_instance_ids": [records[0]["instance_id"]]}]}, []
     monkeypatch.setattr(runtime, "run_evidence_reflector", agent)
     monkeypatch.setattr(runtime, "run_evidence_curator", agent)
+    if learning_mode == "codex_reflection":
+        from src.optimization import safe_pce_reflection
+        class Conversation:
+            def __init__(self, **kwargs): self.root = kwargs["container"].evidence_dir
+            def __enter__(self): return self
+            def __exit__(self, *args): pass
+            def call_json(self, **kwargs):
+                parent = json.loads((self.root / "parent.json").read_text())
+                parent["checklist"][0]["guide"] = "Compare the requirements; revision."
+                (self.root.parent / "candidate_response.json").write_text(json.dumps(parent))
+                return parent, []
+            def session_evidence(self): return []
+        original_reflection = safe_pce_reflection.run_reflection_phase
+        monkeypatch.setattr(safe_pce_reflection, "run_reflection_phase", lambda *args, **kwargs:
+            original_reflection(*args, **kwargs, conversation_factory=Conversation))
     waves = []
     def scheduler(self, **kw):
         tasks = kw["tasks"]
@@ -199,8 +221,18 @@ def test_verified_end_to_end_and_audit_detects_lost_evidence(
     assert result["structural_fidelity"] == "passed"
     assert result["physical_records"] == 6
     assert agent_calls == {"plan": 6, "code": 6}
-    assert result["phases"] == {"reflector": 2, "curator": 1, "refiner": 0}
+    expected_phases = ({"reflector": 0, "curator": 0, "refiner": 0, "reflection": 1}
+                       if learning_mode == "codex_reflection" else {"reflector": 2, "curator": 1, "refiner": 0})
+    assert result["phases"] == expected_phases
     assert result["manual_review_required"] and 2 in waves
+    if learning_mode == "codex_reflection":
+        parent = next((config.run_dir / "hpc_tasks/hybrid_reflection").glob("*/attempts/task_0000/attempt_01/inputs/parent.json"))
+        content = json.loads(parent.read_text())
+        content["checklist"][0]["guide"] = "Lost evidence"
+        parent.write_text(json.dumps(content))
+        with pytest.raises(ValueError, match="staged parent"):
+            audit(path)
+        return
     curator = next((config.run_dir / "hpc_tasks/hybrid_curator").glob("*/attempts/task_0000/attempt_01/inputs/reflection_index.json"))
     content = json.loads(curator.read_text())
     content[0]["root_cause_analysis"] = "Lost evidence"
