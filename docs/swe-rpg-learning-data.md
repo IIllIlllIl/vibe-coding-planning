@@ -304,6 +304,44 @@ acceptance, not evidence of a learning gain. Retrospective references can
 describe tests introduced by the official patch; their presence in a report
 does not establish availability in the Planner's frozen repository.
 
+## Whole-candidate reference comparison
+
+`configs/gepa_safe_pce_rpg_codex_reflection_diag8_v1_20261105.yaml` changes
+proposal generation to `codex_reflection` for eight proposals. It uses the
+unchanged prompt and shared runtime accepted by the completed reflection smoke
+at `a22da8d`, plus the immutable full Diag6 source/split/reference package.
+Safe PCE prompts/models, official scoring, seed42, mini8/window8, cap10/48/96
+tokens, 46/15/16 split, validation gate and Pareto selection are inherited from
+the six-proposal subagent binding. Original training-only reference availability
+is the same across all three learning arms. Each starts from the original
+placeholder; no other run's outputs, candidates, counters or private sessions
+are imported.
+
+The whole-candidate arm has one fresh Codex learning conversation per proposal,
+with optional delegation and a full candidate response. It has no mandatory
+Ref reports, counters, operation delta or Refiner. This is a declared learning
+method difference, while scheduling, retries and checkpoint components remain
+shared. Its pre-retry bound is `15 + 8 × (8 + 8 + 15) = 263` PCE slots, at most
+789 no-model preparation units and eight learning Workers. Native subagent
+calls, if any, are additional model work inside those Workers.
+
+The independent reference run stopped at four complete proposal checkpoints;
+the subagent reference run completed six. Compare the common prefixes through
+four across all three arms and through six between the latter two; proposals
+seven/eight extend duration. Different runtime revisions, stochastic model
+behavior and potentially diverging future minibatches limit causal attribution.
+Equal split/seed does not guarantee identical later search trajectories.
+
+The completed whole-candidate smoke passed structural fidelity for five PCE
+observations and one reflection Worker. It read Plans, patches and target-test
+evidence, but did not open its four supplied original reference files; it also
+chose short trajectory excerpts. Therefore distinguish reference availability
+from actual reference use in analysis. Its unchanged minibatch score included
+an observable input-coverage improvement that still failed the official exact
+schema assertion. Preserve official scores and inspect the original outcomes;
+do not feed validation trajectories back into learning to explain the gap.
+Prompt simplicity is not a guarantee of exhaustive reading or better scores.
+
 ## Training-diagnostic ablation
 
 The two-arm comparison concerns original retrospective diagnostic availability,

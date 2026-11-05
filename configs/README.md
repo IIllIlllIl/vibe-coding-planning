@@ -26,10 +26,28 @@ lifetimes; see [the lifecycle contract](../docs/documentation-authority.md).
   existing checklist interface and Safe PCE / GEPA outer loop. It uses the
   Native `curator_model` settings with `refiner_enabled: false`.
 
+## RPG eight-proposal whole-candidate reflection comparison
+
+[Learning](gepa_safe_pce_rpg_codex_reflection_diag8_v1_20261105.yaml) and
+[Supervisor](safe_pce_rpg_codex_reflection_diag8_supervisor_v1_20261105.yaml)
+bind the accepted whole-candidate reflection implementation and unchanged smoke
+prompt to the full Diag6 frozen input package. Eight proposals, mini8/window8,
+46/15/16 split, 92 original training references, seed42, cap10/48/96 tokens,
+gpt-6-sol/high and Iris 1 CPU / 4G define this arm. It starts from the original
+placeholder with no output, candidate, counter or session import. The pre-retry
+upper budget is 263 PCE slots, 789 preparation units and eight reflection
+Workers; optional native subagent calls remain Agent-chosen.
+
+The [comparison contract](../docs/swe-rpg-learning-data.md#whole-candidate-reference-comparison)
+distinguishes common iteration prefixes from duration extensions and records
+the actual-reference-reading limitation. PCE, official scoring and outer GEPA
+selection are inherited from the completed subagent formal run. This config
+does not change the reflection prompt to require reading or delegation.
+
 ## RPG whole-candidate reflection smoke
 
 [Learning](gepa_safe_pce_rpg_codex_reflection_smoke_v1_20261105.yaml) and
-[Supervisor](safe_pce_rpg_codex_reflection_smoke_supervisor_v1_20261105.yaml)
+[Archived Supervisor](archive/supervisor_launches/safe_pce_rpg_codex_reflection_smoke_supervisor_v1_20261105.yaml)
 reuse the completed reference smoke's immutable two-train/one-validation input
 package and four training-only reference files. One proposal, mini2/window1,
 seed42, cap10/48/96 tokens, full Codex/gpt-6-sol/high and Iris 1 CPU / 4G remain

@@ -40,11 +40,39 @@ def test_hpc_smoke_only_changes_reflection_and_fresh_run_identity():
     assert smoke.search.max_iterations == 1 and smoke.search.reflection_minibatch_size == 2
     assert smoke.search.max_metric_calls == 6
     from scripts.hpc_supervisor_service import _load_launch_config
-    session, _, args, script = _load_launch_config(Path("configs/safe_pce_rpg_codex_reflection_smoke_supervisor_v1_20261105.yaml"))
+    session, _, args, script = _load_launch_config(Path("configs/archive/supervisor_launches/safe_pce_rpg_codex_reflection_smoke_supervisor_v1_20261105.yaml"))
     assert session == smoke.run_dir.name
     assert args[args.index("--gepa-config") + 1] == "configs/gepa_safe_pce_rpg_codex_reflection_smoke_v1_20261105.yaml"
     assert script.name == "hpc_resume_loop.py"
     assert "--require-clean-worktree" in args and "--reclaim-workspaces" in args
+
+
+def test_eight_proposal_binding_preserves_formal_outer_loop_and_smoke_prompt():
+    formal = load_optimization_config("configs/gepa_safe_pce_rpg_codex_subagents_diag6_v1_20261104.yaml", require_api_keys=False)
+    cfg = load_optimization_config("configs/gepa_safe_pce_rpg_codex_reflection_diag8_v1_20261105.yaml", require_api_keys=False)
+    smoke = load_optimization_config("configs/gepa_safe_pce_rpg_codex_reflection_smoke_v1_20261105.yaml", require_api_keys=False)
+    for field in ("dataset_snapshot", "safe_pce_config", "initial_rules_path", "task", "reflection", "docker", "container", "execution"):
+        assert getattr(cfg, field) == getattr(formal, field), field
+    for field in formal.hybrid.__dataclass_fields__:
+        if field not in {"learning_mode", "prompt_bundle", "prompt_bundle_sha256", "refiner_enabled", "reflector_model", "refiner_model"}:
+            assert getattr(cfg.hybrid, field) == getattr(formal.hybrid, field), field
+    for field in formal.search.__dataclass_fields__:
+        if field not in {"max_iterations", "min_proposals", "max_metric_calls", "projection_metric_calls"}:
+            assert getattr(cfg.search, field) == getattr(formal.search, field), field
+    for field in formal.hpc.__dataclass_fields__:
+        if field not in {"remote_project_dir", "remote_task_dir", "job_name_prefix", "worker_config_path"}:
+            assert getattr(cfg.hpc, field) == getattr(formal.hpc, field), field
+    assert cfg.hybrid.prompt_bundle_sha256 == smoke.hybrid.prompt_bundle_sha256
+    assert cfg.hybrid.learning_mode == "codex_reflection" and not cfg.hybrid.refiner_enabled
+    assert cfg.search.max_iterations == cfg.search.min_proposals == 8
+    assert cfg.search.max_metric_calls == cfg.search.projection_metric_calls == 15 + 8 * (8 + 8 + 15)
+    assert len({cfg.run_dir, formal.run_dir, smoke.run_dir}) == 3
+    from scripts.hpc_supervisor_service import _load_launch_config
+    session, _, args, script = _load_launch_config(Path("configs/safe_pce_rpg_codex_reflection_diag8_supervisor_v1_20261105.yaml"))
+    assert session == cfg.run_dir.name
+    assert args[args.index("--gepa-config") + 1] == "configs/gepa_safe_pce_rpg_codex_reflection_diag8_v1_20261105.yaml"
+    assert "--require-clean-worktree" in args and "--reclaim-workspaces" in args
+    assert script.name == "hpc_resume_loop.py"
 
 
 def payload():
