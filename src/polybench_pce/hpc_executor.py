@@ -79,6 +79,7 @@ def pce_semantic_sha256(config: PolyBenchPCEConfig) -> str:
           if getattr(config, "agent_backends", {}) else []),
         root / "src" / "environment" / "apptainer_env.py",
         root / "src" / "environment" / "repository_baseline.py",
+        root / "src" / "swe_verified_pce" / "runner.py",  # shared checkpoint predicate
         *sorted((root / "src" / "polybench_pce").glob("*.py")),
     ]
     return _stable_hash(

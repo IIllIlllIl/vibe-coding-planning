@@ -2030,13 +2030,15 @@ def test_verified_evaluator_preserves_prepared_sif_repository(
     monkeypatch.setattr(
         test_spec_module,
         "make_test_spec",
-        lambda *_args, **_kwargs: SimpleNamespace(eval_script="pytest -rA"),
+        lambda *_args, **_kwargs: SimpleNamespace(eval_script="pytest -rA",
+            FAIL_TO_PASS=["test_observed"], PASS_TO_PASS=[]),
     )
     monkeypatch.setattr(
         grading,
         "get_eval_report",
         lambda **_kwargs: {"owner__repo-1": {"resolved": True}},
     )
+    monkeypatch.setattr(grading, "get_logs_eval", lambda *a: ({"test_observed": "PASSED"}, True))
     case = SimpleNamespace(
         instance_id="owner__repo-1",
         base_commit="abc",
@@ -2064,6 +2066,48 @@ def test_verified_evaluator_preserves_prepared_sif_repository(
         "M\ttox.ini\n"
     )
     assert instances[0].cleaned is True
+
+
+@pytest.mark.parametrize("body,outcome", [
+    ("ImportError: No module named missing_dependency", "unknown"),
+    ("PASSED unrelated.py::test_other", "unknown"),
+    ("FAILED test_module.py::test_bug - AssertionError\nPASSED test_module.py::test_control", "unresolved"),
+    ("PASSED test_module.py::test_bug\nPASSED test_module.py::test_control", "resolved"),
+])
+def test_verified_real_grading_requires_an_observed_target_test(tmp_path, monkeypatch, body, outcome):
+    import swebench.harness.grading as grading
+    import swebench.harness.test_spec.test_spec as specs
+    from src.optimization.safe_pce_learning import outcome_score, IncompletePCEEvaluation
+    targets = ["test_module.py::test_bug", "test_module.py::test_control"]
+    spec = SimpleNamespace(repo="pytest-dev/pytest", version="4.4", instance_id="case",
+        FAIL_TO_PASS=targets[:1], PASS_TO_PASS=targets[1:], eval_script="pytest -rA")
+    raw = grading.START_TEST_OUTPUT + "\n" + body + "\n" + grading.END_TEST_OUTPUT
+    class Environment:
+        def __init__(self, **kwargs): pass
+        def execute(self, command, **kwargs):
+            return {"returncode": 2 if outcome == "unknown" else int(outcome == "unresolved"),
+                    "output": raw} if command == "/bin/bash .vibe_eval.sh" else {"returncode": 0, "output": ""}
+        def cleanup(self): pass
+    monkeypatch.setattr("src.swe_verified_pce.evaluator.ApptainerEnvironment", Environment)
+    monkeypatch.setattr("src.swe_verified_pce.evaluator.verify_swebench_evaluator_repository", lambda *a, **k: None)
+    monkeypatch.setattr(specs, "make_test_spec", lambda *a, **k: spec)
+    # Both official log parsing and grading execute for real; mock only the
+    # repository/container boundary, not the evidence being checked.
+    case = SimpleNamespace(instance_id="case", base_commit="abc", image=SimpleNamespace(requested_ref="synthetic"),
+                           evaluator_input=lambda: {})
+    result = evaluate_swe_verified_apptainer("Original nonempty patch", case,
+        container=SimpleNamespace(sif_cache_dir=tmp_path, writable_tmpfs=True), capacity_window=None,
+        workdir="/testbed", phase_workdir=tmp_path / "evaluate", command_timeout=30)
+    assert result["task_outcome"] == outcome
+    assert result["raw_test_output"] == raw
+    output = {"status": "completed", "pce_status": "completed", "evaluator_result": result}
+    if outcome == "unknown":
+        assert result["outcome_reason"] == "official_test_evidence_missing"
+        with pytest.raises(IncompletePCEEvaluation):
+            outcome_score(output, mode="swe_verified_pce", instance_id="case")
+    else:
+        assert outcome_score(output, mode="swe_verified_pce", instance_id="case") == float(outcome == "resolved")
+        assert set(result["parsed_test_result"]) == set(targets)
 
 
 def test_verified_evaluator_resume_reidentifies_preserved_checkpoints(

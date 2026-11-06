@@ -342,6 +342,33 @@ schema assertion. Preserve official scores and inspect the original outcomes;
 do not feed validation trajectories back into learning to explain the gap.
 Prompt simplicity is not a guarantee of exhaustive reading or better scores.
 
+## Fresh source-isolated duration extension
+
+The twenty-proposal binding
+`configs/gepa_safe_pce_rpg_codex_reflection_diag20_v1_20261106.yaml` preserves
+the whole-candidate arm's frozen inputs, prompts, models, official scoring and
+outer selection. It starts from C0 and imports no historical execution or
+optimizer evidence. Its upper budget is `15 + 20 × (8 + 8 + 15) = 635` PCE
+slots, 1,905 no-model preparation units and twenty reflection Workers before
+retries. Native delegation remains an Agent choice.
+
+The completed eight-proposal run at `e0377ff` preserved all 188 original PCE
+records and their declared scores, but 17 Planner/Coder phase executions across
+eight tasks made 58 external service-tool calls. One task retrieved future API
+implementation text. Both seed validation and first-proposal training evidence
+were affected, so no completed iteration is a clean checkpoint under the
+frozen offline-source policy. These results remain auditable historical
+observations rather than clean performance estimates.
+
+The shared Native runtime now disables Apps/connectors as well as built-in web
+search, retaining provider connectivity, command source restrictions and native
+delegation. Local command tests and the pinned CLI's configuration probe do not
+prove the model's actual compute-node tool inventory. Inspect that inventory
+and external-access events in the new execution. Different runtime boundaries
+and model stochasticity prevent attributing a new score difference solely to
+the longer learning budget. Validation/test evidence remains excluded from
+learning.
+
 ## Training-diagnostic ablation
 
 The two-arm comparison concerns original retrospective diagnostic availability,

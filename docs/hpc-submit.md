@@ -144,6 +144,10 @@ for startup checks and inference; `verify_codex_sif_startup.py` accepts
 runtime checks actual socket permission denial before model use. Do not use
 a whole-container `--network none` flag for the Native CLI or modify Host
 firewall/DNS state to implement this policy.
+The shared Native command also disables Apps/connectors and built-in web
+search: service-side tools bypass the command network sandbox. A successful
+socket probe alone is insufficient source-isolation acceptance; inspect the
+actual tool inventory and events in the authorized compute-node smoke.
 
 ## Retained Entry Points
 

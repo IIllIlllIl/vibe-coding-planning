@@ -38,6 +38,25 @@ def test_preflight_and_inference_share_network_and_filesystem_policy(tmp_path, w
         assert definition["extends"] == ":read-only" and "filesystem" not in definition
     if disabled:
         assert 'web_search="disabled"' in command
+    if writable or disabled:
+        assert "features.apps=false" in command
+        assert "apps._default.enabled=false" in command
+
+
+@pytest.mark.parametrize("persistent", [False, True])
+@pytest.mark.parametrize("writable", [False, True])
+def test_isolated_native_roles_disable_service_tools_without_disabling_delegation(tmp_path, persistent, writable):
+    command = runtime._codex_command({"executor": "codex_cli", "model": "gpt-6-sol"},
+        working_directory=tmp_path, output_path=tmp_path / "final", repository_writable=writable,
+        tool_network_disabled=True, persistent=persistent,
+        session_id="same-private-session" if persistent else None)
+    options = [command[i + 1] for i, value in enumerate(command) if value == "--config"]
+    policy = tomllib.loads("\n".join(options))
+    assert policy["features"]["apps"] is False
+    assert policy["apps"]["_default"]["enabled"] is False
+    assert policy["web_search"] == "disabled"
+    assert policy["features"].get("multi_agent", False) is persistent
+    assert "mcp_servers" not in policy  # No provider credential or server configuration introduced.
 
 
 @pytest.mark.parametrize("writable", [False, True])

@@ -524,7 +524,7 @@ def _codex_command(
         *(["--config", "features.multi_agent=true", "--config",
            f"agents.default_subagent_model={json.dumps(model)}", "--config",
            f"agents.default_subagent_reasoning_effort={json.dumps(effort)}"] if persistent else []),
-        *(["--config", 'web_search="disabled"'] if repository_writable or command_hook_options or tool_network_disabled else []),
+        *(_source_tool_options() if repository_writable or command_hook_options or tool_network_disabled else []),
         "--cd",
         str(working_directory.resolve()),
         "--output-last-message",
@@ -532,6 +532,15 @@ def _codex_command(
         *(["resume", session_id] if session_id else []),
         "-",
     ]
+
+
+def _source_tool_options() -> list[str]:
+    # Apps execute service-side and bypass the command sandbox's network
+    # policy. Disable discovery as well as built-in web search for isolated
+    # experiment roles; native shell/file/delegation tools remain available.
+    return ["--config", 'web_search="disabled"',
+            "--config", "features.apps=false",
+            "--config", "apps._default.enabled=false"]
 
 
 class CodexConversation:
@@ -698,7 +707,7 @@ def _run_codex_text_agent(
                         raise CodexConfigurationError("Native source-policy bundle preflight failed")
                     # Parse the actual hook TOML with the pinned CLI, without inference.
                     features = subprocess.run([*prefix, _codex_binary(effective_model),
-                        *command_hooks[:-1], "features", "list"],
+                        *command_hooks[:-1], *_source_tool_options(), "features", "list"],
                         text=True, capture_output=True, check=False, env=launch_env, timeout=30)
                     preflight_checks.append({"check": "source_policy_hook_config", "returncode": features.returncode,
                                              "stdout": features.stdout, "stderr": features.stderr})

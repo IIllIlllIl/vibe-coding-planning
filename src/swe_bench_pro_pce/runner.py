@@ -96,6 +96,8 @@ class SWEBenchProPCERunner(SWEVerifiedPCERunner):
         phase: str,
         host_workdir: Path,
         evidence_dir: Path,
+        timeout: int | None = None,
+        history_bundle: Path | None = None,
     ) -> None:
         _ = host_workdir
         validate_official_sif_workspace(

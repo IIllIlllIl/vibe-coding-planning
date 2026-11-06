@@ -108,6 +108,10 @@ failures are not Agent failures and remain unscored while recovering and after
 exhaustion. Infrastructure attempts do not count toward the three evidenced
 Agent failures required to assign an Agent-failure zero.
 Unknown evaluator checkpoints are not reused as completed evaluations.
+PolyBench uses the same shared checkpoint predicate. A newly unknown evaluator
+result enters its existing evaluator retry rather than a completed checkpoint;
+resuming an older unknown checkpoint retries only evaluation. Save the original
+Code patch/trajectory before optional workspace inventories or duplicate exports.
 Only the first unfinished phase retries; successful Agent outputs remain intact.
 An explicitly rejected Code application is unfinished Code, not an invitation
 to replay the same evaluator input. RPG routes setup=0/test_patch=0/code_patch=1
@@ -494,6 +498,16 @@ as `CodexSIFExecution.tool_network_disabled` to the inner tool permission
 profile, not to the entire container: CLI model/authentication traffic remains
 outside the tool sandbox. Never replace this with Host firewall changes or a
 whole-container network flag that cuts off the Native provider connection.
+
+Isolated Native roles also disable built-in web search and Apps/connector
+discovery with `web_search="disabled"`, `features.apps=false` and
+`apps._default.enabled=false`. A denied shell socket does not constrain
+service-side connector tools. These settings belong in the shared Native
+command builder, including persistent/resumed sessions; preserve native
+shell/file/delegation tools and provider authentication. The pinned CLI's
+no-model feature listing verifies configuration support, not an end-to-end
+claim that a model session has no external tools. See the
+[official configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference).
 
 `_permission_options` in the existing Native runtime owns the generated
 profile for both preflight and inference. Named profiles must not be mixed

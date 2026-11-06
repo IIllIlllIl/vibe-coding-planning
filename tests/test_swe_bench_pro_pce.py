@@ -166,6 +166,8 @@ def test_pro_official_workspace_baseline_allows_unstaged_build_artifacts(
         phase="plan",
         host_workdir=tmp_path / "workspace",
         evidence_dir=tmp_path / "evidence",
+        timeout=120,
+        history_bundle=tmp_path / "unused-by-historical-policy.bundle",
     )
     evidence = json.loads((tmp_path / "evidence/repository_baseline.json").read_text())
     assert evidence["workspace_is_allowed_to_be_dirty"] is True
@@ -236,13 +238,19 @@ def test_pro_evaluator_keeps_gold_test_checkout_after_patch(
 
 
 def test_pro_executor_emits_pro_worker_and_mode(tmp_path: Path) -> None:
+    from src.optimization.config import ModelConfig
+    model = ModelConfig(model="test", api_base="https://example.invalid", api_key_env="DEEPSEEK_API_KEY",
+                        temperature=0.0, max_steps=0, cost_limit=0.0, timeout=60)
     config = SimpleNamespace(
+        plan=model,
+        code=model,
         hpc=SimpleNamespace(
             worker_config_path="configs/pro.yaml", job_name_prefix="pro",
             partition="batch", cpus_per_task=1, mem="4G", time="00:45:00",
             python_module="lang/Python/3.11", container_module="tools/Apptainer",
             remote_env_file="~/.config/vibe-coding-planning/deepseek.env",
             python_bin="python3",
+            max_running_array_tasks=None,
         )
     )
     from src.swe_verified_pce.hpc_executor import build_array_script
@@ -266,6 +274,7 @@ def test_prepared_pro_config_and_snapshot_are_frozen() -> None:
     )
     assert config.dataset == "ScaleAI/SWE-bench_Pro"
     assert config.dataset_type == "pro"
+    assert config.code_submission_protocol == "staged_diff_v1"
     assert config.docker.workdir == "/app"
     assert config.hpc.max_task_attempts == 3
     assert config.hpc.time == "00:45:00"

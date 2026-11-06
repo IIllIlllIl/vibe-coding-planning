@@ -706,6 +706,10 @@ def test_verified_official_outcome_boundary(resolved):
         terminal_kind="official_tests_resolved" if resolved else "official_tests_unresolved",
         official_report={"task": {"resolved": resolved, "tests_status": {"FAIL_TO_PASS": {"success": ["test_x"]}}}})
     assert outcome_score(output, mode="swe_verified_pce", instance_id="task") == float(resolved)
+    for parsed in ({}, {"unrelated_test": "PASSED"}):
+        output["evaluator_result"]["parsed_test_result"] = parsed
+        with pytest.raises(IncompletePCEEvaluation, match="no observed official target"):
+            outcome_score(output, mode="swe_verified_pce", instance_id="task")
     output["evaluator_result"]["official_report"]["task"]["tests_status"] = {}
     with pytest.raises(IncompletePCEEvaluation):
         outcome_score(output, mode="swe_verified_pce", instance_id="task")

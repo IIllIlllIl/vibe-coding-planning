@@ -68,10 +68,40 @@ def test_eight_proposal_binding_preserves_formal_outer_loop_and_smoke_prompt():
     assert cfg.search.max_metric_calls == cfg.search.projection_metric_calls == 15 + 8 * (8 + 8 + 15)
     assert len({cfg.run_dir, formal.run_dir, smoke.run_dir}) == 3
     from scripts.hpc_supervisor_service import _load_launch_config
-    session, _, args, script = _load_launch_config(Path("configs/safe_pce_rpg_codex_reflection_diag8_supervisor_v1_20261105.yaml"))
+    session, _, args, script = _load_launch_config(Path("configs/archive/supervisor_launches/safe_pce_rpg_codex_reflection_diag8_supervisor_v1_20261105.yaml"))
     assert session == cfg.run_dir.name
     assert args[args.index("--gepa-config") + 1] == "configs/gepa_safe_pce_rpg_codex_reflection_diag8_v1_20261105.yaml"
     assert "--require-clean-worktree" in args and "--reclaim-workspaces" in args
+    assert script.name == "hpc_resume_loop.py"
+
+
+def test_twenty_proposal_binding_changes_only_budget_and_identity():
+    old = load_optimization_config("configs/gepa_safe_pce_rpg_codex_reflection_diag8_v1_20261105.yaml", require_api_keys=False)
+    path = "configs/gepa_safe_pce_rpg_codex_reflection_diag20_v1_20261106.yaml"
+    cfg = load_optimization_config(path, require_api_keys=False)
+    for field in cfg.__dataclass_fields__:
+        if field not in {"run_dir", "search", "hpc"}:
+            assert getattr(cfg, field) == getattr(old, field), field
+    for field in old.search.__dataclass_fields__:
+        if field not in {"max_iterations", "min_proposals", "max_metric_calls", "projection_metric_calls"}:
+            assert getattr(cfg.search, field) == getattr(old.search, field), field
+    for field in old.hpc.__dataclass_fields__:
+        if field not in {"remote_project_dir", "remote_task_dir", "job_name_prefix", "worker_config_path"}:
+            assert getattr(cfg.hpc, field) == getattr(old.hpc, field), field
+    assert cfg.run_dir != old.run_dir
+    assert cfg.search.max_iterations == cfg.search.min_proposals == 20
+    assert cfg.search.max_metric_calls == cfg.search.projection_metric_calls == 15 + 20 * 31
+    raw = yaml.safe_load(Path(path).read_text())
+    contract = raw["experiment_contract"]
+    assert contract["previous_output_import"] is False
+    assert contract["budget"]["pce_evaluation_slots_without_cache_upper_bound"] == 635
+    assert contract["budget"]["no_model_workspace_preparation_elements_without_retries_upper_bound"] == 1905
+    assert contract["budget"]["reflection_units_upper_bound"] == 20
+    from scripts.hpc_supervisor_service import _load_launch_config
+    session, _, args, script = _load_launch_config(Path("configs/safe_pce_rpg_codex_reflection_diag20_supervisor_v1_20261106.yaml"))
+    assert session == cfg.run_dir.name
+    assert args[args.index("--gepa-config") + 1] == path
+    assert {"--require-clean-worktree", "--reclaim-workspaces", "--reclaim-staging", "--submit"} <= set(args)
     assert script.name == "hpc_resume_loop.py"
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from collections import Counter
 import hashlib
 import json
 import os
@@ -1117,6 +1118,85 @@ def test_runner_reuses_only_completed_phase_checkpoints(
     assert second == first
     assert calls.count("plan") == calls.count("code") == calls.count("evaluate") == 1
     assert calls.count("baseline:plan") == calls.count("baseline:code") == 1
+
+
+def test_unknown_evaluation_retries_only_evaluator_and_ignores_old_unknown_checkpoint(tmp_path, monkeypatch):
+    snapshot, images, _ = _frozen_inputs(tmp_path)
+    case = load_polybench_pce_cases(snapshot, images)[0][0]
+    config = load_polybench_pce_config(_config(tmp_path, snapshot, images), require_api_keys=False)
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-only")
+    _stub_workspace_evidence(monkeypatch)
+    monkeypatch.setattr(PolyBenchPCERunner, "_verify_sif", lambda *a: None)
+    monkeypatch.setattr(PolyBenchPCERunner, "_environment", lambda *a, **k: SimpleNamespace(cleanup=lambda: None))
+    monkeypatch.setattr(PolyBenchPCERunner, "_restore_agent_repository", lambda *a, **k: None)
+    calls = Counter()
+    def agent(phase, value):
+        calls[phase] += 1
+        return value, []
+    monkeypatch.setattr("src.polybench_pce.runner.plan_agent.run", lambda *a, **k: agent("plan", "Exact Plan"))
+    monkeypatch.setattr("src.polybench_pce.runner.code_agent.run", lambda *a, **k: agent("code", _diff("src/module.py")))
+    unknown = {"status": "completed", "task_outcome": "unknown", "outcome_reason": "parser_failed"}
+    good = {"status": "completed", "task_outcome": "unresolved", "terminal_kind": "tests_parsed"}
+    def evaluator(*a, **kw):
+        calls["evaluate"] += 1
+        result = unknown if calls["evaluate"] == 1 else good
+        kw["result_callback"](result)
+        return result
+    def runner(attempt):
+        return PolyBenchPCERunner(config, None, checkpoint_dir=tmp_path / "checkpoints",
+            checkpoint_identity="identity", attempt_dir=tmp_path / f"attempt-{attempt}", evaluator=evaluator)
+    with pytest.raises(PolyBenchEvaluatorOperationalError) as caught:
+        runner(1).run(case)
+    assert caught.value.retry_disposition == "retry_same_phase"
+    assert caught.value.evidence == unknown
+    assert not (tmp_path / "checkpoints/evaluate.json").exists()
+    before = (tmp_path / "checkpoints/code.json").read_bytes()
+    assert runner(2).run(case)["evaluator_result"] == good
+    assert calls == {"plan": 1, "code": 1, "evaluate": 2}
+    assert (tmp_path / "checkpoints/code.json").read_bytes() == before
+    atomic_json(tmp_path / "checkpoints/evaluate.json", {"checkpoint_identity": "identity",
+        "phase": "evaluate", "payload": {"evaluator_result": unknown}})
+    assert runner(3).run(case)["evaluator_result"] == good
+    assert calls == {"plan": 1, "code": 1, "evaluate": 3}
+
+
+@pytest.mark.parametrize("failure", ["inventory", "sidecar", "logging"])
+def test_optional_code_evidence_failure_preserves_patch_and_never_reruns_coder(tmp_path, monkeypatch, failure):
+    snapshot, images, _ = _frozen_inputs(tmp_path)
+    case = load_polybench_pce_cases(snapshot, images)[0][0]
+    config = load_polybench_pce_config(_config(tmp_path, snapshot, images), require_api_keys=False)
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-only")
+    monkeypatch.setattr(PolyBenchPCERunner, "_verify_sif", lambda *a: None)
+    monkeypatch.setattr(PolyBenchPCERunner, "_environment", lambda *a, **k: SimpleNamespace(cleanup=lambda: None))
+    monkeypatch.setattr(PolyBenchPCERunner, "_restore_agent_repository", lambda *a, **k: None)
+    calls = Counter()
+    def agent(phase, value):
+        calls[phase] += 1
+        return value, []
+    patch = _diff("src/module.py")
+    monkeypatch.setattr("src.polybench_pce.runner.plan_agent.run", lambda *a, **k: agent("plan", "Exact Plan"))
+    monkeypatch.setattr("src.polybench_pce.runner.code_agent.run", lambda *a, **k: agent("code", patch))
+    def inventory(*a, **k):
+        if failure == "inventory":
+            raise OSError("optional inventory unavailable")
+        return {}
+    monkeypatch.setattr(PolyBenchPCERunner, "_capture_code_workspace_evidence", inventory)
+    if failure in {"sidecar", "logging"}:
+        original = Path.open
+        def denied(path, *a, **k):
+            if path.name == ("raw_code_submission.patch" if failure == "sidecar" else "audit_events.jsonl"):
+                raise OSError("optional file unavailable")
+            return original(path, *a, **k)
+        monkeypatch.setattr(Path, "open", denied)
+    good = {"status": "completed", "task_outcome": "resolved", "terminal_kind": "tests_parsed"}
+    def evaluator(*a, **k):
+        calls["evaluate"] += 1
+        return good
+    for attempt in [1, 2]:
+        result = PolyBenchPCERunner(config, None, checkpoint_dir=tmp_path / "checkpoints",
+            checkpoint_identity="identity", attempt_dir=tmp_path / f"attempt-{attempt}", evaluator=evaluator).run(case)
+        assert result["patch"] == patch and result["plan"] == "Exact Plan"
+    assert calls == {"plan": 1, "code": 1, "evaluate": 1}
 
 
 def test_runner_preserves_direct_plan_and_disabled_thinking(

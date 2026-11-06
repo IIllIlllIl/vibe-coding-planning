@@ -34,6 +34,7 @@ class SWEBenchProPCEConfig:
     code_instance_template: str
     nrpv_block: str
     slurm_evaluator_timeout_outcome: str
+    code_submission_protocol: str = "staged_diff_v1"
     dataset: str = "ScaleAI/SWE-bench_Pro"
     dataset_type: str = "pro"
     mode: str = "swe_bench_pro_pce"

@@ -26,10 +26,29 @@ lifetimes; see [the lifecycle contract](../docs/documentation-authority.md).
   existing checklist interface and Safe PCE / GEPA outer loop. It uses the
   Native `curator_model` settings with `refiner_enabled: false`.
 
+## RPG twenty-proposal whole-candidate reflection
+
+[Learning](gepa_safe_pce_rpg_codex_reflection_diag20_v1_20261106.yaml) and
+[Supervisor](safe_pce_rpg_codex_reflection_diag20_supervisor_v1_20261106.yaml)
+bind a fresh placeholder-seed run to the shared whole-candidate reflection
+runtime with Native Apps/connectors and built-in web search disabled. The
+46/15/16 split, 92 training-only reference files, prompt, seed42, mini8/window8,
+cap10/48/96 tokens, gpt-6-sol/high and Iris 1 CPU / 4G retain the eight-proposal
+binding. Twenty proposals raise the pre-retry upper budget to 635 PCE slots,
+1,905 preparation units and twenty reflection Workers. No historical PCE,
+candidate, optimizer state, counter or conversation is imported.
+
+The [data contract](../docs/swe-rpg-learning-data.md#fresh-source-isolated-duration-extension)
+records the historical source-access limitation and the distinction between
+local command/config acceptance and actual compute-node tool availability.
+Iteration count is an upper stopping budget, not a guarantee of admitted
+candidates or score improvement. Configuration presence is not permission to
+launch dirty or uncommitted source.
+
 ## RPG eight-proposal whole-candidate reflection comparison
 
 [Learning](gepa_safe_pce_rpg_codex_reflection_diag8_v1_20261105.yaml) and
-[Supervisor](safe_pce_rpg_codex_reflection_diag8_supervisor_v1_20261105.yaml)
+[Archived Supervisor](archive/supervisor_launches/safe_pce_rpg_codex_reflection_diag8_supervisor_v1_20261105.yaml)
 bind the accepted whole-candidate reflection implementation and unchanged smoke
 prompt to the full Diag6 frozen input package. Eight proposals, mini8/window8,
 46/15/16 split, 92 original training references, seed42, cap10/48/96 tokens,
@@ -43,6 +62,8 @@ distinguishes common iteration prefixes from duration extensions and records
 the actual-reference-reading limitation. PCE, official scoring and outer GEPA
 selection are inherited from the completed subagent formal run. This config
 does not change the reflection prompt to require reading or delegation.
+Its terminal source-access audit limits performance interpretation; see the
+[fresh-run boundary](../docs/swe-rpg-learning-data.md#fresh-source-isolated-duration-extension).
 
 ## RPG whole-candidate reflection smoke
 

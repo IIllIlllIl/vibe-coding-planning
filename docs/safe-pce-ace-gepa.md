@@ -196,7 +196,12 @@ historical outputs and checkpoints are not rewritten or re-certified.
 | Operationally incomplete / unsupported evaluator outcome | No score |
 
 The initial conservative outcome boundary requires parsed PolyBench tests or
-an official SWE-Verified report with test-status evidence. Empty generations,
+an official SWE-Verified report with observed target-test evidence. The
+Verified evaluator preserves the official parser map and requires at least
+one parsed F2P/P2P target. The report's failure lists alone are insufficient:
+the official grader also places unobserved tests there. Missing target results
+follow the existing evaluator retry/NoScore path, without inferring whether
+Coder or environment caused the missing evidence. Empty generations,
 patch-application failures, unknown results, timeouts and missing test evidence
 are not silently converted into scored unresolved tasks. An exhausted case
 does not cancel the other PCE tasks: the existing executor finishes/retains

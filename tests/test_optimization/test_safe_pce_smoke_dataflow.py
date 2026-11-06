@@ -140,6 +140,7 @@ def test_verified_end_to_end_and_audit_detects_lost_evidence(
             self.evaluator = lambda *a, **kw: {"status": "completed",
                 "terminal_kind": "official_tests_resolved" if resolved else "official_tests_unresolved",
                 "evaluator_resolved": resolved, "task_outcome": "resolved" if resolved else "unresolved",
+                "parsed_test_result": {"x": "PASSED" if resolved else "FAILED"},
                 "official_report": {case.instance_id: {"resolved": resolved, "tests_status": {"FAIL_TO_PASS": {"success": ["x"]}}}}}
         return original(self, case)
     monkeypatch.setattr(SWEVerifiedPCERunner, "run", run)

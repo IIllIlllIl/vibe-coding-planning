@@ -22,12 +22,13 @@ from src.environment.repository_history import (
 )
 from src.environment.source_access import extract_http_urls
 from src.exceptions import FatalError
-from src.optimization.audit import AuditedModel, JsonlLogger
+from src.optimization.audit import AuditedModel, JsonlLogger, optional_diagnostic
 from src.optimization.hpc.task_batch import atomic_json
 from src.polybench_pce.config import PolyBenchPCEConfig
 from src.polybench_pce.dataset import file_sha256
-from src.polybench_pce.evaluator import evaluate_polybench_apptainer
+from src.polybench_pce.evaluator import evaluate_polybench_apptainer, PolyBenchEvaluatorOperationalError
 from src.polybench_pce.models import PolyBenchPCECase
+from src.swe_verified_pce.runner import phase_checkpoint
 
 
 Evaluator = Callable[..., dict[str, Any]]
@@ -94,18 +95,19 @@ class PolyBenchPCERunner:
         )
 
     def _checkpoint(self, phase: str) -> dict[str, Any] | None:
-        path = self.checkpoint_dir / f"{phase}.json"
-        if not path.is_file():
-            return None
-        value = json.loads(path.read_text(encoding="utf-8"))
-        if value.get("checkpoint_identity") != self.checkpoint_identity:
-            raise FatalError(f"PCE checkpoint identity mismatch: {path}")
-        if value.get("phase") != phase or not isinstance(value.get("payload"), dict):
-            raise FatalError(f"invalid PCE checkpoint: {path}")
-        self.audit.write("pce_phase_resumed", phase=phase, path=str(path))
-        return dict(value["payload"])
+        value = phase_checkpoint(self.checkpoint_dir, self.checkpoint_identity, phase)
+        if value is not None:
+            self.audit.write_optional("pce_phase_resumed", phase=phase,
+                                      path=str(self.checkpoint_dir / f"{phase}.json"))
+        return value
 
     def _save_checkpoint(self, phase: str, payload: dict[str, Any]) -> None:
+        result = payload.get("evaluator_result", {})
+        if phase == "evaluate" and result.get("task_outcome") == "unknown":
+            raise PolyBenchEvaluatorOperationalError(
+                "Evaluator produced no usable task outcome",
+                outcome_reason=result.get("outcome_reason", "unknown"),
+                retry_disposition="retry_same_phase", evidence=result)
         atomic_json(
             self.checkpoint_dir / f"{phase}.json",
             {
@@ -237,7 +239,7 @@ class PolyBenchPCERunner:
         try:
             env.cleanup()
         except Exception as exc:
-            self.audit.write(
+            self.audit.write_optional(
                 "polybench_pce_environment_cleanup_failed",
                 phase=phase,
                 error_type=type(exc).__name__,
@@ -248,7 +250,7 @@ class PolyBenchPCERunner:
         try:
             self._cleanup(path)
         except Exception as exc:
-            self.audit.write(
+            self.audit.write_optional(
                 "polybench_pce_workspace_cleanup_failed",
                 phase=phase,
                 path=str(path),
@@ -504,11 +506,6 @@ class PolyBenchPCERunner:
                     allow_empty_submission=True,
                 )
                 raw_patch_path = self.attempt_dir / "raw_code_submission.patch"
-                raw_patch_path.write_text(raw_patch, encoding="utf-8")
-                workspace_evidence = self._capture_code_workspace_evidence(
-                    env,
-                    submitted_patch=raw_patch,
-                )
                 submission = {
                     "policy": "agent_classified_staged_implementation_v1",
                     "patch_path": str(raw_patch_path),
@@ -516,15 +513,22 @@ class PolyBenchPCERunner:
                     "empty_submission": not bool(raw_patch.strip()),
                     "host_patch_transformation": False,
                 }
-                atomic_json(self.attempt_dir / "patch_submission.json", submission)
                 code_checkpoint = {
                     "raw_patch": raw_patch,
                     "patch": raw_patch,
                     "patch_submission": submission,
-                    "workspace_evidence": workspace_evidence,
+                    "workspace_evidence": {},
                     "trajectory": list(trajectory),
                 }
                 self._save_checkpoint("code", code_checkpoint)
+                # Match repository PCE: preserve the Agent output before any
+                # optional workspace inventory or duplicate diagnostic export.
+                with optional_diagnostic("PolyBench Code workspace evidence"):
+                    raw_patch_path.write_text(raw_patch, encoding="utf-8")
+                    atomic_json(self.attempt_dir / "patch_submission.json", submission)
+                    code_checkpoint["workspace_evidence"] = self._capture_code_workspace_evidence(
+                        env, submitted_patch=raw_patch)
+                    self._save_checkpoint("code", code_checkpoint)
             finally:
                 self._best_effort_environment_cleanup(env, phase="code")
                 self._best_effort_workspace_cleanup(code_workspace, phase="code")
@@ -549,7 +553,7 @@ class PolyBenchPCERunner:
                     "result_callback": lambda result: self._save_checkpoint(
                         "evaluate", {"evaluator_result": result}
                     ),
-                    "cleanup_error_callback": lambda exc: self.audit.write(
+                    "cleanup_error_callback": lambda exc: self.audit.write_optional(
                         "polybench_pce_environment_cleanup_failed",
                         phase="evaluate",
                         error_type=type(exc).__name__,

@@ -88,6 +88,10 @@ def outcome_score(output: dict, *, mode: str, instance_id: str) -> float:
         report = evaluator.get("official_report", {}).get(instance_id, {})
         if not isinstance(report, dict) or report.get("resolved") is not resolved or not report.get("tests_status"):
             raise IncompletePCEEvaluation(f"{instance_id}: missing official test-status evidence")
+        targets = {name for group in ("FAIL_TO_PASS", "PASS_TO_PASS")
+                   for names in report["tests_status"].get(group, {}).values() for name in names}
+        if not targets.intersection(evaluator.get("parsed_test_result", {})):
+            raise IncompletePCEEvaluation(f"{instance_id}: no observed official target-test result")
     return float(resolved)
 
 

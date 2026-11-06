@@ -108,7 +108,7 @@ def evaluate_swe_verified_apptainer(
         return result
 
     try:
-        from swebench.harness.grading import get_eval_report
+        from swebench.harness.grading import get_eval_report, get_logs_eval
         from swebench.harness.test_spec.test_spec import make_test_spec
     except ImportError as exc:
         raise SWEVerifiedEvaluatorOperationalError(
@@ -252,6 +252,18 @@ def evaluate_swe_verified_apptainer(
                 )
             )
         resolved = bool(instance_report["resolved"])
+        # The official report lists unobserved expected tests as failures too.
+        # A nonempty tests_status therefore does not establish that tests ran.
+        parsed, found = get_logs_eval(test_spec, output_path)
+        targets = set(test_spec.FAIL_TO_PASS) | set(test_spec.PASS_TO_PASS)
+        if not found or not parsed or not targets.intersection(parsed):
+            return completed(_terminal(
+                outcome="unknown", reason="official_test_evidence_missing",
+                evaluator_resolved=None,
+                evidence={"official_report": report, "parsed_test_result": parsed,
+                          "raw_test_output": raw_output, "test_returncode": returncode,
+                          "code_patch_applied": True, "code_patch_attempts": attempts},
+            ))
         return completed(
             _terminal(
                 outcome="resolved" if resolved else "unresolved",
@@ -261,6 +273,7 @@ def evaluate_swe_verified_apptainer(
                 evaluator_resolved=resolved,
                 evidence={
                     "official_report": report,
+                    "parsed_test_result": parsed,
                     "raw_test_output": raw_output,
                     "test_returncode": returncode,
                     "test_timed_out": False,
