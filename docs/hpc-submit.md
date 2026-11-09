@@ -79,7 +79,9 @@ Archived launch files retain historical arguments for provenance and must be
 adapted before use with the current entry point.
 
 For GEPA, reaching the iteration target is not proof that final result export
-completed. The Supervisor retains recovery until the result authority exists.
+completed. After the engine records `optimization_completed`, the Supervisor
+retains recovery until the result authority exists. User-selected early stops
+remain effective while optimization is still in progress.
 For a search whose final checkpoint already records `optimization_completed`,
 `hpc_submit_batch.sh --gepa-rules --gepa-config PATH --finalize-only` reuses the
 same staging/submission path but invokes only the existing report exporter.

@@ -194,7 +194,11 @@ def test_remote_status_timeout_is_retryable_without_submitting(monkeypatch) -> N
     }
 
 
-def test_remote_status_queries_only_authoritative_batch_and_window_jobs(tmp_path, monkeypatch, capsys):
+@pytest.mark.parametrize("search_finished", [False, True])
+def test_remote_status_queries_only_authoritative_batch_and_window_jobs(tmp_path, monkeypatch, capsys, search_finished):
+    (tmp_path / "iteration_progress.json").write_text(json.dumps({"completed_iterations": 20,
+        "first_observed_completed_iterations": 0,
+        "last_event": "optimization_completed" if search_finished else "state_saved"}))
     states = {
         "hpc_tasks/reflector/ordinary/task_state.json": {"phase": "SUBMITTED", "active_job_id": "123"},
         "hpc_tasks/curator/completed/task_state.json": {"phase": "COMPLETE", "active_job_id": "999"},
@@ -239,6 +243,7 @@ def test_remote_status_queries_only_authoritative_batch_and_window_jobs(tmp_path
     assert queried == ["123", "456"]
     assert result["worker_states"] == {"123": "RUNNING", "456": "PENDING"}
     assert result["active_workers"] == ["123", "456"]
+    assert bool(result.get("optimization_completed")) is search_finished
 
 
 def test_first_missing_run_skips_only_unneeded_staging_reclamation() -> None:
@@ -1662,7 +1667,8 @@ def test_hpc_supervisor_stops_at_cumulative_iteration_target(tmp_path: Path) -> 
     assert migrated["target_iterations"] == 5
 
 
-def test_gepa_target_without_result_resubmits_unfinished_finalization(monkeypatch):
+@pytest.mark.parametrize("search_finished", [False, True])
+def test_gepa_target_without_result_resubmits_unfinished_finalization(monkeypatch, search_finished):
     state = {"submissions": 1}
     config = SimpleNamespace(submit=True, slice_time="00:08:00", poll_interval_seconds=0,
         target_iterations=20, remote_run_snapshot="synthetic-private-run", once=True,
@@ -1672,15 +1678,15 @@ def test_gepa_target_without_result_resubmits_unfinished_finalization(monkeypatc
     monkeypatch.setattr(resume_loop, "_save_supervisor_state", lambda *a: None)
     monkeypatch.setattr(resume_loop, "_submission_identity_error", lambda config: None)
     monkeypatch.setattr(resume_loop, "remote_run_status", lambda config: {
-        "state": "resumable", "completed_iterations": 20,
+        "state": "resumable", "completed_iterations": 20, "optimization_completed": search_finished,
         "active_controllers": [], "active_workers": []})
     monkeypatch.setattr(resume_loop, "reclaim_remote_staging", lambda *a: {"removed": 0})
     monkeypatch.setattr(resume_loop, "reclaim_remote_workspaces", lambda *a, **k: {"removed": 0})
     submitted = []
     monkeypatch.setattr(resume_loop, "submit_slice", lambda config: submitted.append(config) or "finalizer")
     assert resume_loop.run_loop(config) == 0
-    assert len(submitted) == 1
-    assert state["status"] == "controller_submitted"
+    assert len(submitted) == int(search_finished)
+    assert state["status"] == ("controller_submitted" if search_finished else "iteration_target_reached")
     assert state["last_completed_iterations"] == 20
 
 

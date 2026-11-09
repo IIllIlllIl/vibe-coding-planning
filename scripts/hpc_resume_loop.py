@@ -645,6 +645,8 @@ if progress_path.is_file():
         payload["first_observed_completed_iterations"] = int(
             progress["first_observed_completed_iterations"]
         )
+        if progress.get("last_event") == "optimization_completed":
+            payload["optimization_completed"] = True
     except Exception as exc:
         payload = {"state": "invalid_progress", "error": str(exc), "run_dir": str(run_dir)}
 
@@ -1142,7 +1144,9 @@ def run_loop(config: SupervisorConfig) -> int:
                     f"from={extension['from']} to={extension['to']}"
                 )
                 continue
-            if _iteration_target_reached(config, status, state) and not config.offline_gepa:
+            if _iteration_target_reached(config, status, state) and not (
+                config.offline_gepa and status.get("optimization_completed")
+            ):
                 state["status"] = "iteration_target_reached"
                 _save_supervisor_state(config, state)
                 print("[hpc-resume] iteration target reached")
