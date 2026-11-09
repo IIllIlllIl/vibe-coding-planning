@@ -87,6 +87,8 @@ It requires matching non-source experiment semantics and aligned final state,
 loads the checkpoint once, and starts no search, Agent or evaluator. It does
 not source provider credentials. Reporting-source changes are permitted only
 on this postprocessing path; normal resume identity checks are unchanged.
+The prompt bundle may move with a separate reporting staging root only when
+its frozen content hash matches; a changed prompt digest remains incompatible.
 
 ## SWE-chat Login Preheat
 

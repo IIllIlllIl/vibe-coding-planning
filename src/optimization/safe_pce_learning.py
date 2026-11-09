@@ -315,6 +315,12 @@ def finalize_safe_pce_run(config):
         # This path never resumes optimization under changed source.
         original.pop("source")
         expected.pop("source")
+        # A separate reporting staging root relocates the prompt file. Its
+        # frozen content digest, rather than that incidental path, must match.
+        for semantic in (original, expected):
+            hybrid = semantic.get("hybrid", {})
+            if hybrid.get("prompt_bundle_sha256"):
+                hybrid.pop("prompt_bundle", None)
         if (manifest.get("version") != MANIFEST_VERSION or original != expected
                 or manifest["latest_max_metric_calls"] != config.search.max_metric_calls):
             raise ValueError("finalize-only experiment semantics differ from the frozen run")

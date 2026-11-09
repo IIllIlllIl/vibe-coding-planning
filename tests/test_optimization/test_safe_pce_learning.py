@@ -503,6 +503,7 @@ def test_completed_checkpoint_can_finalize_without_search_or_agents(tmp_path, mo
     manifest_path = root / "run_manifest.json"
     manifest = json.loads(manifest_path.read_text())
     manifest["semantic_config"]["source"]["project_optimization"]["safe_pce_learning.py"] = "old-reporting-code"
+    manifest["semantic_config"]["hybrid"]["prompt_bundle"] = "/old/staging/same-frozen-prompt.yaml"
     manifest["semantic_sha256"] = hashlib.sha256(json.dumps(manifest["semantic_config"],
         ensure_ascii=False, sort_keys=True).encode()).hexdigest()
     manifest_path.write_text(json.dumps(manifest))
@@ -537,6 +538,9 @@ def test_completed_checkpoint_can_finalize_without_search_or_agents(tmp_path, mo
     assert all((root / name).read_bytes() == content for name, content in preserved.items())
     with pytest.raises(ValueError, match="semantics differ"):
         module.finalize_safe_pce_run(replace(config, search=replace(config.search, seed=123)))
+    with pytest.raises(ValueError, match="semantics differ"):
+        module.finalize_safe_pce_run(replace(config, hybrid=replace(config.hybrid,
+            prompt_bundle_sha256="0" * 64)))
     (root / "iteration_progress.json").write_text('{"completed_iterations":0,"last_event":"state_saved"}')
     with pytest.raises(ValueError, match="completed search checkpoint"):
         module.finalize_safe_pce_run(config)
