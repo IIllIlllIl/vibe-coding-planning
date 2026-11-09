@@ -5,6 +5,7 @@ import shlex
 import subprocess
 from pathlib import Path
 import sys
+import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -49,7 +50,8 @@ def test_hpc_submit_batch_help_succeeds() -> None:
     assert "--gepa-config" in result.stdout
 
 
-def test_hpc_submit_batch_finds_ulhpc_submit_next_to_conda_exe(tmp_path) -> None:
+@pytest.mark.parametrize("finalize", [False, True])
+def test_hpc_submit_batch_finds_ulhpc_submit_next_to_conda_exe(tmp_path, finalize) -> None:
     conda_bin = tmp_path / "conda-base" / "bin"
     conda_bin.mkdir(parents=True)
     fake_ulhpc = conda_bin / "ulhpc-submit"
@@ -88,6 +90,7 @@ def test_hpc_submit_batch_finds_ulhpc_submit_next_to_conda_exe(tmp_path) -> None
             str(submit_config),
             "--remote-dir",
             "~/hpc_runs/conda-fallback-test",
+            *(["--finalize-only"] if finalize else []),
         ],
         cwd=REPO_ROOT,
         capture_output=True,
@@ -99,6 +102,9 @@ def test_hpc_submit_batch_finds_ulhpc_submit_next_to_conda_exe(tmp_path) -> None
     assert result.returncode == 0, result.stderr
     assert "[hpc-submit] invoking ulhpc-submit" in result.stdout
     assert "--dry-run" in result.stdout
+    if finalize:
+        assert '--finalize-only' in result.stdout
+        assert 'source "$REMOTE_ENV_FILE"' not in result.stdout
 
 
 def test_hpc_submit_batch_dry_run_uses_remote_env_file_without_local_key(

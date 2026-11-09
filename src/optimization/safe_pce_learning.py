@@ -272,7 +272,14 @@ class SafePCEBackend:
                             "unresolved": sum(row[0] == 0 for row in rows.values()),
                             "agent_failed": sum(row[1] for row in rows.values()),
                             "total": len(rows), "parents": result.parents[index]})
-        atomic_json(self.config.run_dir / "result.json", json.loads(json.dumps(result.to_dict(), default=list)))
+        def write_result(temporary):
+            # Retain the complete result, including original trajectories,
+            # without materializing several full JSON/Unicode copies.
+            with temporary.open("w", encoding="utf-8") as stream:
+                json.dump(result.to_dict(), stream, indent=2, ensure_ascii=False,
+                          sort_keys=True, default=list)
+                stream.write("\n")
+        atomic_write(self.config.run_dir / "result.json", write_result)
         # result.json is the retained scientific result. These views are
         # reproducible from it and the scored evaluation records.
         with optional_diagnostic("candidate metrics export"):
@@ -281,6 +288,58 @@ class SafePCEBackend:
             (self.config.run_dir / "best_guideline.txt").write_text(result.best_candidate["rules"] + "\n")
         with optional_diagnostic("candidate tree export"):
             (self.config.run_dir / "candidate_tree.html").write_text(result.candidate_tree_html())
+
+
+def finalize_safe_pce_run(config):
+    """Export an already completed search without constructing any Agent/engine.
+
+    Reporting code may differ from the frozen run. All non-source experiment
+    semantics must still match; its manifest and checkpoints remain unchanged.
+    """
+    from gepa.core.result import GEPAResult
+    from gepa.core.state import GEPAState
+    from .behavioral_runner import _controller_lock
+    from .resume import MANIFEST_VERSION, _semantic_config
+
+    if config.task.semantics != TASK_SEMANTICS or config.safe_pce_config is None:
+        raise ValueError("finalize-only requires Safe PCE learning")
+    with _controller_lock(config):
+        root = config.run_dir
+        manifest = json.loads((root / "run_manifest.json").read_text())
+        fingerprint = hashlib.sha256(json.dumps(manifest["semantic_config"],
+            ensure_ascii=False, sort_keys=True).encode()).hexdigest()
+        if fingerprint != manifest.get("semantic_sha256"):
+            raise ValueError("finalize-only frozen manifest fingerprint mismatch")
+        original = dict(manifest["semantic_config"])
+        expected = _semantic_config(config, initial_rules=config.initial_rules_path.read_text().strip())
+        # This path never resumes optimization under changed source.
+        original.pop("source")
+        expected.pop("source")
+        if (manifest.get("version") != MANIFEST_VERSION or original != expected
+                or manifest["latest_max_metric_calls"] != config.search.max_metric_calls):
+            raise ValueError("finalize-only experiment semantics differ from the frozen run")
+        progress = json.loads((root / "iteration_progress.json").read_text())
+        resume = json.loads((root / "gepa_resume_state.json").read_text())
+        if (progress.get("last_event") != "optimization_completed"
+                or progress.get("completed_iterations") != config.search.max_iterations
+                or resume.get("gepa_state_i", -1) + 1 != progress["completed_iterations"]):
+            raise ValueError("finalize-only requires an aligned, completed search checkpoint")
+        backend = SafePCEBackend(config)
+        _, validation = backend.load_snapshot()
+        state = GEPAState.load(str(root))
+        if state.i != resume["gepa_state_i"]:
+            raise ValueError("finalize-only checkpoint iteration mismatch")
+        result = GEPAResult.from_state(state, run_dir=str(root), seed=config.search.seed)
+        del state  # Release the full training cache before scanning/exporting evidence.
+        backend.write_report(result, validation)
+        warnings = bool(resume.get("reflection_failures")) or (
+            resume.get("successful_proposals", 0) < config.search.min_proposals)
+        atomic_json(root / "controller_status.json", {
+            "schema_version": 1,
+            "status": "completed_with_warnings" if warnings else "completed",
+            "finalization_recovered": True,
+        })
+        return result
 
 
 class SafePCEGEPAAdapter:

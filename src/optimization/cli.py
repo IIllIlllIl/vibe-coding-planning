@@ -21,9 +21,15 @@ from src.optimization.playbook_replay import run_curator_replay
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True)
+    parser.add_argument("--finalize-only", action="store_true",
+                        help="Export a completed Safe PCE checkpoint without running Agents or search")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO)
     raw = yaml.safe_load(Path(args.config).read_text(encoding="utf-8")) or {}
+    if args.finalize_only:
+        from src.optimization.safe_pce_learning import finalize_safe_pce_run
+        finalize_safe_pce_run(load_optimization_config(args.config, require_api_keys=False))
+        return
     if raw.get("mode") == "offline_reject_playbook_curator_replay":
         run_curator_replay(args.config)
     elif raw.get("mode") in {

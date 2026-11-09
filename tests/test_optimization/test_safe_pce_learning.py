@@ -480,6 +480,84 @@ def test_report_streams_once_for_multiple_candidates_without_retaining_training(
     assert path.read_bytes() == original
 
 
+def test_completed_checkpoint_can_finalize_without_search_or_agents(tmp_path, monkeypatch):
+    from gepa.core.result import GEPAResult
+    from gepa.core.state import GEPAState, ValsetEvaluation
+    from src.optimization import safe_pce_learning as module
+    config = _prepared(tmp_path, iterations=1)
+    root = config.run_dir
+    root.mkdir(exist_ok=True)
+    backend = SafePCEBackend(config)
+    _, validation = backend.load_snapshot()
+    rules = config.initial_rules_path.read_text().strip()
+    prepare_run_manifest(config, initial_rules=rules)
+    outputs = {case.instance_id: {"pce_runs": [{"pce_output": dict(
+        _output(case.instance_id, True), opaque={"unicode": "原始🧪" * 5000})}]}
+        for case in validation}
+    scores = {case.instance_id: 1.0 for case in validation}
+    state = GEPAState({"rules": rules}, ValsetEvaluation(outputs, scores), track_best_outputs=True)
+    state.i = 0
+    state.save(str(root))
+    expected = json.loads(json.dumps(GEPAResult.from_state(state, run_dir=str(root),
+                                    seed=config.search.seed).to_dict(), default=list))
+    manifest_path = root / "run_manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["semantic_config"]["source"]["project_optimization"]["safe_pce_learning.py"] = "old-reporting-code"
+    manifest["semantic_sha256"] = hashlib.sha256(json.dumps(manifest["semantic_config"],
+        ensure_ascii=False, sort_keys=True).encode()).hexdigest()
+    manifest_path.write_text(json.dumps(manifest))
+    (root / "gepa_resume_state.json").write_text(json.dumps({"gepa_state_i": 0,
+        "successful_proposals": 1, "reflection_failures": []}))
+    (root / "iteration_progress.json").write_text(json.dumps({"completed_iterations": 1,
+        "last_event": "optimization_completed"}))
+    (root / "safe_pce_evaluations.jsonl").write_text("".join(json.dumps({"split": "validation",
+        "instance_id": identifier, "candidate_sha256": hashlib.sha256(rules.encode()).hexdigest(),
+        "score": 1.0, "output": output}) + "\n" for identifier, output in outputs.items()))
+    preserved = {p.name: p.read_bytes() for p in root.iterdir() if p.is_file()}
+    def forbidden(*a, **k):
+        raise AssertionError("Finalization must not run search, evaluation or an Agent")
+    monkeypatch.setattr("gepa.optimize", forbidden)
+    monkeypatch.setattr(SafePCEBackend, "evaluate", forbidden)
+    monkeypatch.setattr("src.optimization.behavioral_hybrid_runtime.run_hybrid_optimization", forbidden)
+    original_load = GEPAState.load
+    loads = []
+    monkeypatch.setattr(GEPAState, "load", lambda path: loads.append(path) or original_load(path))
+    # A complete document must never be assembled with dumps during export.
+    original_dumps = json.dumps
+    def no_full_result(value, *a, **k):
+        if isinstance(value, dict) and "best_outputs_valset" in value:
+            raise AssertionError("Full result must stream to the atomic writer")
+        return original_dumps(value, *a, **k)
+    monkeypatch.setattr(json, "dumps", no_full_result)
+    module.finalize_safe_pce_run(config)
+    assert len(loads) == 1
+    assert json.loads((root / "result.json").read_text()) == expected
+    assert json.loads((root / "controller_status.json").read_text())["status"] == "completed"
+    assert len(json.loads((root / "safe_pce_candidate_metrics.json").read_text())) == 1
+    assert all((root / name).read_bytes() == content for name, content in preserved.items())
+    with pytest.raises(ValueError, match="semantics differ"):
+        module.finalize_safe_pce_run(replace(config, search=replace(config.search, seed=123)))
+    (root / "iteration_progress.json").write_text('{"completed_iterations":0,"last_event":"state_saved"}')
+    with pytest.raises(ValueError, match="completed search checkpoint"):
+        module.finalize_safe_pce_run(config)
+
+
+def test_finalize_cli_needs_no_provider_credentials_or_learning_setup(tmp_path, monkeypatch):
+    from src.optimization import cli, safe_pce_learning
+    path = tmp_path / "config.yaml"
+    path.write_text("mode: safe_pce_hybrid_ace\n")
+    config = object()
+    calls = []
+    monkeypatch.setattr("sys.argv", ["run_gepa_rules.py", "--config", str(path), "--finalize-only"])
+    def load(path, *, require_api_keys):
+        assert require_api_keys is False
+        return config
+    monkeypatch.setattr(cli, "load_optimization_config", load)
+    monkeypatch.setattr(safe_pce_learning, "finalize_safe_pce_run", lambda value: calls.append(value))
+    cli.main()
+    assert calls == [config]
+
+
 def test_replay_refuses_to_silently_repair_existing_corruption(tmp_path):
     from src.optimization.safe_pce_learning import _append
     path = tmp_path / "safe_pce_evaluations.jsonl"

@@ -1142,7 +1142,7 @@ def run_loop(config: SupervisorConfig) -> int:
                     f"from={extension['from']} to={extension['to']}"
                 )
                 continue
-            if _iteration_target_reached(config, status, state):
+            if _iteration_target_reached(config, status, state) and not config.offline_gepa:
                 state["status"] = "iteration_target_reached"
                 _save_supervisor_state(config, state)
                 print("[hpc-resume] iteration target reached")

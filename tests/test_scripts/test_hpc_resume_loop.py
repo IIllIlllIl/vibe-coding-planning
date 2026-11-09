@@ -1662,6 +1662,28 @@ def test_hpc_supervisor_stops_at_cumulative_iteration_target(tmp_path: Path) -> 
     assert migrated["target_iterations"] == 5
 
 
+def test_gepa_target_without_result_resubmits_unfinished_finalization(monkeypatch):
+    state = {"submissions": 1}
+    config = SimpleNamespace(submit=True, slice_time="00:08:00", poll_interval_seconds=0,
+        target_iterations=20, remote_run_snapshot="synthetic-private-run", once=True,
+        offline_gepa=True)
+    monkeypatch.setattr(resume_loop, "_supervisor_lock", lambda config: nullcontext())
+    monkeypatch.setattr(resume_loop, "_load_supervisor_state", lambda config: state)
+    monkeypatch.setattr(resume_loop, "_save_supervisor_state", lambda *a: None)
+    monkeypatch.setattr(resume_loop, "_submission_identity_error", lambda config: None)
+    monkeypatch.setattr(resume_loop, "remote_run_status", lambda config: {
+        "state": "resumable", "completed_iterations": 20,
+        "active_controllers": [], "active_workers": []})
+    monkeypatch.setattr(resume_loop, "reclaim_remote_staging", lambda *a: {"removed": 0})
+    monkeypatch.setattr(resume_loop, "reclaim_remote_workspaces", lambda *a, **k: {"removed": 0})
+    submitted = []
+    monkeypatch.setattr(resume_loop, "submit_slice", lambda config: submitted.append(config) or "finalizer")
+    assert resume_loop.run_loop(config) == 0
+    assert len(submitted) == 1
+    assert state["status"] == "controller_submitted"
+    assert state["last_completed_iterations"] == 20
+
+
 def test_hpc_supervisor_rejects_completion_before_iteration_target(
     tmp_path: Path,
 ) -> None:

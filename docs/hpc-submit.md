@@ -78,6 +78,16 @@ See the [current acceptance contract](knowledge/blocking-policy-acceptance-20261
 Archived launch files retain historical arguments for provenance and must be
 adapted before use with the current entry point.
 
+For GEPA, reaching the iteration target is not proof that final result export
+completed. The Supervisor retains recovery until the result authority exists.
+For a search whose final checkpoint already records `optimization_completed`,
+`hpc_submit_batch.sh --gepa-rules --gepa-config PATH --finalize-only` reuses the
+same staging/submission path but invokes only the existing report exporter.
+It requires matching non-source experiment semantics and aligned final state,
+loads the checkpoint once, and starts no search, Agent or evaluator. It does
+not source provider credentials. Reporting-source changes are permitted only
+on this postprocessing path; normal resume identity checks are unchanged.
+
 ## SWE-chat Login Preheat
 
 The historical acquisition contract and commands are archived in

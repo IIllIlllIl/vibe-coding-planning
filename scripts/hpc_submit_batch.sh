@@ -14,6 +14,7 @@ set -euo pipefail
 
 SUBMIT=0
 GEPA_RULES=0
+FINALIZE_ONLY=0
 GEPA_CONFIG=""
 JOB_NAME="vibe-gepa"
 PARTITION="batch"
@@ -39,6 +40,7 @@ Usage:
 Required:
   --gepa-rules              Flag to submit a GEPA rules optimization job
   --gepa-config PATH        Path to the GEPA config file
+  --finalize-only           Export a completed Safe PCE checkpoint; no Agents/search
 
 Slurm / ulhpc-submit options:
   --job-name NAME           Slurm job name (default: vibe-gepa)
@@ -85,6 +87,10 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --gepa-rules)
       GEPA_RULES=1
+      shift
+      ;;
+    --finalize-only)
+      FINALIZE_ONLY=1
       shift
       ;;
     --gepa-config)
@@ -469,7 +475,14 @@ PY
   trap 'rm -f "$EFFECTIVE_ULHPC_CONFIG"' EXIT
 fi
 
-if [[ $BEHAVIORAL_NO_CONTAINER -eq 1 ]]; then
+if [[ $FINALIZE_ONLY -eq 1 ]]; then
+REMOTE_SCRIPT=$(cat <<EOF
+set -euo pipefail
+PYTHONPATH="\$PWD/third_party/gepa/src:\${PYTHONPATH:-}" \\
+  python3 scripts/internal/run_gepa_rules.py --config "$GEPA_CONFIG_REL" --finalize-only
+EOF
+)
+elif [[ $BEHAVIORAL_NO_CONTAINER -eq 1 ]]; then
 REMOTE_SCRIPT=$(cat <<EOF
 set -euo pipefail
 echo "[vibe-gepa] started at \$(date) on \$(hostname)"

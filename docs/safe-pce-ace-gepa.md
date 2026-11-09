@@ -14,6 +14,14 @@ policy: three failures in one Planner/Coder phase yield 0 with explicit
 and any completed earlier phase. Infrastructure/evaluation failures remain
 unscored and retry the unfinished phase; they are not imputed as U.
 
+Final result export streams the complete GEPA document through the shared atomic
+writer, preserving all recorded outputs without whole-document JSON round trips.
+The [finalize-only entry point](hpc-submit.md#recovery-not-submission-count-limits)
+can rebuild reports from an aligned, completed checkpoint. It runs no model or
+evaluation and leaves the frozen manifest, optimizer/RNG checkpoints and original
+PCE records intact. Reporting-code changes do not authorize normal optimization
+resume under a changed source fingerprint.
+
 This opt-in backend learns **reusable Plan blockers and their investigation
 guides from implementation outcomes**. A blocker is a flaw in a proposed
 approach that materially threatens correct implementation or critical task
