@@ -18,7 +18,8 @@ from tests.test_optimization.test_safe_pce_learning import _prepared, _output, A
 from tests.test_optimization.test_behavioral_hybrid_runtime import review
 
 
-def test_native_conversation_resumes_same_private_state_without_exporting_auth(tmp_path, monkeypatch):
+@pytest.mark.parametrize("raw_guide", [False, True])
+def test_native_conversation_resumes_same_private_state_without_exporting_auth(tmp_path, monkeypatch, raw_guide):
     from contextlib import contextmanager
     from types import SimpleNamespace
     from src.optimization import codex_cli_runtime as runtime
@@ -45,7 +46,9 @@ def test_native_conversation_resumes_same_private_state_without_exporting_auth(t
         if len(commands) == 2:
             assert command[command.index("resume") + 1] == "same-root-thread"
         output = Path(command[command.index("--output-last-message") + 1]).name
-        (mounted / output).write_text('{"stage":' + str(len(commands)) + '}')
+        payload = ('\r\nGuide ' + str(len(commands)) + '\r\n' if raw_guide else
+                   '{"stage":' + str(len(commands)) + '}')
+        (mounted / output).write_bytes(payload.encode())
         sessions = home / "sessions"
         sessions.mkdir(exist_ok=True)
         (sessions / "child.jsonl").write_bytes(b'{"command":"inspect"}\r\n')
@@ -54,8 +57,11 @@ def test_native_conversation_resumes_same_private_state_without_exporting_auth(t
     boundary = runtime.CodexSIFExecution(tmp_path / "test.sif", evidence,
         output_files=("one.json", "two.json"))
     with runtime.CodexConversation(model_config=model, container=boundary, attempt_dir=tmp_path / "attempt") as session:
-        assert session.call_json(system="Role", user="Evidence", task="Reflect", output_filename="one.json")[0] == {"stage": 1}
-        assert session.call_json(system="Role", user="Counted evidence", task="Curate", output_filename="two.json")[0] == {"stage": 2}
+        call = session.call_text if raw_guide else session.call_json
+        assert call(system="Role", user="Evidence", task="Reflect", output_filename="one.json")[0] == (
+            '\r\nGuide 1\r\n' if raw_guide else {"stage": 1})
+        assert call(system="Role", user="Counted evidence", task="Curate", output_filename="two.json")[0] == (
+            '\r\nGuide 2\r\n' if raw_guide else {"stage": 2})
         archive = session.session_evidence()
         assert archive == [{"path": "child.jsonl", "text": '{"command":"inspect"}\r\n'}]
     assert homes[0] == homes[1] and not homes[0].exists()

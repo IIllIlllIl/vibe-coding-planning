@@ -6,6 +6,14 @@ lifetimes; see [the lifecycle contract](../docs/documentation-authority.md).
 
 ## Maintained entry points
 
+- [Guide-only Codex research example](codex_pce_research.example.yaml) uses the
+  [persistent research loop](../docs/codex-pce-research.md), not GEPA selection.
+  It retains the same Safe PCE Worker and official scorer. The example has no
+  prepared local benchmark environment or launch authorization.
+  The [RPG two-task smoke](codex_pce_research_rpg_smoke_v1_20261116.yaml)
+  binds the HPC executor for seed plus two updates, with validation details
+  isolated from the learning conversation.
+
 - Start a new launch identity from [hpc_supervisor.example.yaml](hpc_supervisor.example.yaml).
   Use the shared Supervisor; do not create a new launcher implementation.
 - [Safe PCE / ACE](../docs/safe-pce-ace-gepa.md) owns the task-only learning

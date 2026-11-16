@@ -88,9 +88,13 @@ def test_codex_cli_uses_ephemeral_read_only_stdin_and_parses_final_json(
     assert trajectory[3]["content"]["events"][0]["thread_id"] == "thread-1"
 
 
+@pytest.mark.parametrize("process_status", [0, 7])
 def test_codex_cli_preserves_failed_event_trajectory(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, process_status
 ) -> None:
+    attempt = tmp_path / "attempt"
+    attempt.mkdir()
+    (attempt / "codex_final_response.json").write_text('{"stale": true}')
     monkeypatch.setattr(
         codex_cli_runtime.subprocess,
         "run",
@@ -100,7 +104,7 @@ def test_codex_cli_preserves_failed_event_trajectory(
             else SimpleNamespace(returncode=0, stdout="", stderr="")
             if command[1] == "sandbox"
             else SimpleNamespace(
-                returncode=7,
+                returncode=process_status,
                 stdout='{"type":"error","message":"quota"}\n',
                 stderr="failed",
             )

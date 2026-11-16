@@ -13,7 +13,7 @@ from pathlib import Path
 
 import yaml
 
-from src.agents.planning_artifact import PLANNING_ARTIFACT_INSTRUCTIONS
+from src.agents.planning_artifact import PLANNING_ARTIFACT_INSTRUCTIONS, PLANNING_GUIDE_INSTRUCTIONS
 from src.optimization.behavioral_hybrid import checker_projection
 
 
@@ -87,7 +87,7 @@ def resolved_pce_payload(base):
     return raw
 
 
-def materialize_pce_config(base, artifact: dict, directory: Path, *, repetitions: int = 1,
+def materialize_pce_config(base, artifact: dict | str, directory: Path, *, repetitions: int = 1,
                            run_dir: Path | None = None, job_name_prefix: str | None = None):
     """Persist effective prompts/config; candidate data stays a template value.
 
@@ -98,11 +98,13 @@ def materialize_pce_config(base, artifact: dict, directory: Path, *, repetitions
     instance = base.plan_instance_template
     if "{{ planning_rules }}" not in instance and "{{planning_rules}}" not in instance:
         instance += "\n<planning_artifact>{{ planning_rules }}</planning_artifact>\n"
+    instructions = PLANNING_GUIDE_INSTRUCTIONS if isinstance(artifact, str) else PLANNING_ARTIFACT_INSTRUCTIONS
     raw["prompts"] = {"plan_system": base.plan_prompt,
-                      "plan_instance": instance + "\n" + PLANNING_ARTIFACT_INSTRUCTIONS,
+                      "plan_instance": instance + "\n" + instructions,
                       "code_system": base.code_prompt, "code_instance": base.code_instance_template,
                       "nrpv_block": base.nrpv_block}
-    raw["planning_rules"] = json.dumps(checker_projection(artifact), ensure_ascii=False)
+    raw["planning_rules"] = (artifact if isinstance(artifact, str)
+                             else json.dumps(checker_projection(artifact), ensure_ascii=False))
     # Repetition comes from the optimizer contract, never a historical 77x2
     # selection. All independent physical units remain one existing PCE array.
     if raw["mode"] == "polybench_pce":

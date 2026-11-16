@@ -22,3 +22,11 @@ briefly describe the evidence found and its consequence for the approach,
 including when the concern is inapplicable. Organize this explanation as
 appropriate for the task. Use the existing final-submission protocol.
 """.strip()
+
+
+PLANNING_GUIDE_INSTRUCTIONS = """
+Use the supplied planning guide to develop an approach that leads to a correct
+implementation of the task. Apply relevant guidance using the task and frozen
+repository, and record the findings that matter to the approach in the Plan.
+Use the existing final-submission protocol.
+""".strip()

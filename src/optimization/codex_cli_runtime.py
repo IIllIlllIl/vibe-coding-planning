@@ -575,6 +575,12 @@ class CodexConversation:
             system=system, user=user, task=task, output_filename=output_filename,
             conversation=self)
 
+    def call_text(self, *, system, user, task, output_filename):
+        return run_codex_agent(container=self.container, model_config=self.model_config,
+            working_directory=self.container.evidence_dir, attempt_dir=self.attempt_dir,
+            system=system, user=user, task=task, output_filename=output_filename,
+            conversation=self)
+
     def session_evidence(self):
         root = Path(self.environment["CODEX_HOME"]) / "sessions"
         return [{"path": str(path.relative_to(root)), "text": path.read_bytes().decode("utf-8")}
@@ -794,10 +800,10 @@ def _run_codex_text_agent(
         except PermanentProviderError as error:
             error.trajectory = trajectory
             raise
-    if completed.returncode != 0:
+    if completed.returncode != 0 or native_errors:
         error = CodexCLIError(
-            f"Codex CLI exited with status {completed.returncode}: "
-            f"{completed.stderr.strip()}"
+            f"Codex CLI turn failed (process status {completed.returncode}): "
+            f"{completed.stderr.strip() or json.dumps(native_errors)}"
         )
         error.trajectory = trajectory  # type: ignore[attr-defined]
         raise error
