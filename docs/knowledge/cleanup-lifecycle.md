@@ -99,6 +99,31 @@ Unknown dates remain explicit and are not automatically eligible for archival.
 
 ## Reversible Cold-Result Consolidation
 
+### Explicit smoke-record retirement
+
+When separately authorized, first reclaim regenerable copies and recheck quota.
+If further space is needed, the same maintained operator's `smoke-records`
+action can inspect an explicit ownership-derived list of old smoke **result**
+roots. `--apply` permanently removes those selected records after idle checks;
+it is not cold archiving and has no restore guarantee. Preserve a private
+date/path/count receipt outside each target. Formal results, frozen inputs,
+SIF/history caches, recent runs and existing cold-archive recovery pointers
+remain outside this path. The cutoff and exact list require the operation's
+user authorization; a directory's age alone is insufficient. No broad result
+glob or automatic retention policy is introduced. This path does not relax
+the historical archive allowlist below.
+
+Before mutation, stop local resume loops as well as remote jobs. Scratch is
+shared between Iris and Aion: an empty Iris queue does not establish global
+idleness. The desktop cleanup entry now checks both clusters and local
+`hpc_resume_loop.py` / `hpc_supervisor_service.py` processes before applying
+copy/result cleanup. An unavailable check is not permission to delete. Continue
+the existing exact-path process checks within each remote unit. This is an
+operator prerequisite, not a new PCE/learning acceptance condition.
+A retained September PolyBench loop survived locally for 49 days and recreated
+its old run after retirement on 2026-11-17. Its newly submitted Aion array was
+stopped; incident records are separate from the retired historical smoke.
+
 An explicitly approved cold-result archive is not disposable-workspace cleanup.
 For the 2026-10-29 operation, the cutoff is **before 2026-09-22**, excluding
 that date. The exact 48-run allowlist, per-run receipts and aggregate outcome

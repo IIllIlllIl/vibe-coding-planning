@@ -42,6 +42,7 @@ class WatchdogTests(unittest.TestCase):
         self.assertEqual(result["pending_processes"], [child])
         self.assertTrue(result["pending"])
 
+
     @unittest.skipUnless(Path('/proc/self/stat').exists(), 'Linux process groups')
     def test_orphan_child_is_counted_after_its_parent_exits(self):
         code = "import os,time; child=os.fork(); " + \
@@ -1022,6 +1023,55 @@ class SlurmArchiveTests(unittest.TestCase):
             with patch.object(archive,'ensure_idle'),patch.object(archive,'archive_one') as invoke:
                 value=archive.archive_slurm_target(config,row)
             self.assertEqual(value['state'],'already_archived');invoke.assert_not_called()
+
+
+class SmokeRetirementTests(unittest.TestCase):
+    def test_stale_local_loop_prevents_retirement_before_any_remote_call(self):
+        with patch.object(archive.subprocess,'check_output',return_value=
+                'PID COMMAND\n123 python scripts/hpc_resume_loop.py --config old-smoke.yaml\n') as call:
+            with self.assertRaisesRegex(RuntimeError,'PID 123'):
+                archive.check_maintenance_owners(['ssh','user@access-iris.uni.lu'],'user')
+            self.assertEqual(call.call_count,1)
+
+    def test_aion_activity_is_checked_when_cleanup_runs_via_iris(self):
+        with patch.object(archive.subprocess,'check_output',side_effect=[
+                'PID COMMAND\n123 python maintenance.py\n','', '42 old-smoke RUNNING\n']) as call:
+            with self.assertRaisesRegex(RuntimeError,'access-aion'):
+                archive.check_maintenance_owners(['ssh','user@access-iris.uni.lu'],'user')
+            self.assertIn('user@access-aion.uni.lu',call.call_args.args[0])
+
+    def test_idle_local_host_and_both_clusters_allow_maintenance(self):
+        with patch.object(archive.subprocess,'check_output',side_effect=['PID COMMAND\n','','']) as call:
+            archive.check_maintenance_owners(['ssh','user@access-aion.uni.lu'],'user')
+            self.assertEqual(call.call_count,3)
+            self.assertIn('user@access-iris.uni.lu',call.call_args.args[0])
+
+    def test_explicit_old_smoke_dry_run_then_authorized_deletion(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); source=root/'run_state/output/SWE-chat/unit-smoke-v1-20261001'
+            source.mkdir(parents=True); (source/'original.json').write_text('{"unchanged":true}')
+            payload=dict(project_root=str(root),source=str(source),name=source.name,
+                date='2026-10-01',cutoff_exclusive='2026-10-17',apply=False,
+                destination=str(root/'operations/receipt'))
+            with patch.object(archive,'ensure_idle'):
+                result=archive.retire_smoke_records(payload)
+                self.assertEqual(result['entries'],2)
+                self.assertTrue((source/'original.json').exists())
+                result=archive.retire_smoke_records(dict(payload,apply=True))
+            self.assertFalse(source.exists())
+            self.assertEqual(result['removed_entries'],2)
+            self.assertEqual(json.loads((root/'operations/receipt/receipt.json').read_text()),result)
+
+    def test_formal_recent_and_outside_roots_cannot_be_retired(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            for name,date,location in [('formal-smoke-20261001','2026-10-01','output'),
+                    ('unit-smoke-20261101','2026-11-01','output'),
+                    ('unit-smoke-20261001','2026-10-01','datasets')]:
+                source=root/location/'SWE-RPG'/name; source.mkdir(parents=True)
+                with self.assertRaises(ValueError):
+                    archive.checked_smoke_source(dict(project_root=str(root),source=str(source),
+                        name=name,date=date,cutoff_exclusive='2026-10-17'))
 
 
 if __name__ == '__main__':

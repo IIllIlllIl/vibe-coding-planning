@@ -1,7 +1,8 @@
-"""Operator-only reversible consolidation; no experiment code or payload edits.
+"""Operator-only storage maintenance; no experiment execution or payload rewriting.
 
 Reuses GNU tar and the project's atomic receipt/private-directory helpers.
 The explicit inventory is the deletion allowlist, not a date-based delete glob.
+Cold archives are reversible; separately authorized smoke retirement is permanent.
 """
 import argparse
 import base64
@@ -644,6 +645,45 @@ def checked_source(payload):
     return source
 
 
+def checked_smoke_source(payload):
+    """Separate explicit retirement authority; never broaden the cold archive."""
+    root, source = Path(payload['project_root']).resolve(), Path(payload['source'])
+    if (source.is_symlink() or not source.resolve().is_relative_to(root)
+            or 'output' not in source.resolve().relative_to(root).parts[:-1]
+            or source.name != payload['name'] or 'smoke' not in source.name.lower()
+            or 'formal' in source.name.lower()
+            or not datetime.strptime(payload['date'], '%Y-%m-%d').date().isoformat()
+                < datetime.strptime(payload['cutoff_exclusive'], '%Y-%m-%d').date().isoformat()):
+        raise ValueError('Not an explicitly selected old smoke result root')
+    return source
+
+
+def retire_smoke_records(payload):
+    """Authorized smoke deletion, not reversible scientific-result archiving."""
+    source = checked_smoke_source(payload)
+    ensure_idle(source)
+    if completed_pointer(source):
+        return dict(kind='result', source=str(source), state='archived_pointer_preserved', removed_entries=0)
+    if not source.exists():
+        return dict(kind='result', source=str(source), state='already_absent', removed_entries=0)
+    before = inventory_tree(source)
+    result = dict(kind='result', source=str(source), state='inspected_smoke',
+        date=payload['date'], cutoff_exclusive=payload['cutoff_exclusive'],
+        entries=before['entries'], removed_entries=0)
+    if payload['apply']:
+        # Preserve the decision/count receipt outside the exact deletion target.
+        destination = Path(payload['destination'])
+        if destination.resolve().is_relative_to(source.resolve()):
+            raise ValueError('Smoke retirement receipt is inside the deletion target')
+        mark_private(destination)
+        atomic_json(destination/'receipt.json', result)
+        ensure_idle(source)
+        shutil.rmtree(source)
+        result.update(state='smoke_records_removed', removed_entries=before['entries'])
+        atomic_json(destination/'receipt.json', result)
+    return result
+
+
 def inventory_tree(source):
     """Metadata inventory only. Equal-looking scientific records are retained."""
     branches, suffixes = collections.Counter(), collections.Counter()
@@ -672,6 +712,31 @@ def ensure_idle(source):
         raise RuntimeError("Active Slurm jobs: retain sources and copies")
     if target_in_use(source):
         raise RuntimeError("Another process references this exact source")
+
+
+def check_maintenance_owners(ssh, user):
+    """Desktop retirement must exclude local launchers and both shared clusters."""
+    rows=subprocess.check_output(['ps','-axo','pid,command'],text=True,timeout=10).splitlines()
+    for row in rows:
+        fields=row.strip().split(None,1)
+        if len(fields)!=2 or not fields[0].isdigit():
+            continue
+        try:
+            arguments=shlex.split(fields[1])
+        except ValueError:
+            continue
+        if any(Path(arg).name in {'hpc_resume_loop.py','hpc_supervisor_service.py'} for arg in arguments):
+            raise RuntimeError('Local experiment launcher is still alive: PID '+fields[0])
+    peers=[ssh]
+    target=ssh[-1]
+    if '@access-iris.' in target:
+        peers.append([*ssh[:-1],target.replace('@access-iris.','@access-aion.')])
+    elif '@access-aion.' in target:
+        peers.append([*ssh[:-1],target.replace('@access-aion.','@access-iris.')])
+    for peer in peers:
+        queued=subprocess.check_output([*peer,'squeue -h -u '+shlex.quote(user)],text=True,timeout=30)
+        if queued.strip():
+            raise RuntimeError('Active jobs on '+peer[-1]+': retain results and copies')
 
 
 def completed_pointer(source):
@@ -1136,6 +1201,9 @@ def remote_action(payload, hpc_source):
                 apply=payload["apply"]) for raw in report["targets"]]
         print(json.dumps(dict(kind="result", **report)), flush=True)
         return
+    if payload['action'] == 'smoke-records':
+        print(json.dumps(retire_smoke_records(payload)), flush=True)
+        return
     source = checked_source(payload)
     ensure_idle(source)
     if completed_pointer(source):
@@ -1257,7 +1325,7 @@ def bundle_legacy(paths, destination):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("inspect", "cleanup", "retry", "copies", "all-copies", "bundle-legacy", "self-test", "reconcile", "ownership", "slurm-copies", "slurm-archives", "slurm-worker"))
+    parser.add_argument("action", choices=("inspect", "cleanup", "retry", "copies", "all-copies", "smoke-records", "bundle-legacy", "self-test", "reconcile", "ownership", "slurm-copies", "slurm-archives", "slurm-worker"))
     parser.add_argument("--manifest", type=Path, required=True)
     for option in ('config','output','attempt-dir','previous-output'):
         parser.add_argument('--'+option,type=Path)
@@ -1309,6 +1377,8 @@ def main():
     if args.action == 'ownership':
         run_ownership_catalog(args,manifest,repo,ssh)
         return
+    if args.apply and args.action in {'cleanup','retry','copies','all-copies','smoke-records'}:
+        check_maintenance_owners(ssh,args.user)
     if args.action == "reconcile":
         report = json.loads((args.report_dir / "report.json").read_text())
         if report.get("action") not in {"retry", "cleanup", "copies", "all-copies", "self-test"}:
