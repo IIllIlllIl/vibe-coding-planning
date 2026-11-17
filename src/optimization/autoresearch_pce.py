@@ -1,15 +1,14 @@
 """AR's Agent-owned research loop over the existing immutable Safe PCE runner.
 
 There is no Host proposal loop, acceptance selector or new P/C/E scheduler.
-The short-lived local socket only bridges an isolated tool command to that
+The small file-command bridge connects an isolated tool command to that
 runner. Upstream research policy lives in the versioned program.md adaptation.
 """
 from contextlib import contextmanager
 import json
-from multiprocessing.connection import Listener, Client
 from pathlib import Path
 import subprocess
-from threading import Thread
+from threading import Event, Thread
 
 from src.optimization.audit import optional_diagnostic
 from src.optimization.codex_cli_runtime import CodexConversation, CodexSIFExecution
@@ -100,52 +99,54 @@ class PCEExperiments:
 
 @contextmanager
 def evaluation_command(experiments, address):
-    """One serial command service, using stdlib framing and shared PCE recovery."""
+    """One serial file command, preserving the existing network-disabled policy."""
     address = Path(address)
-    listener = Listener(str(address), family="AF_UNIX")
-    stopped = False
+    address.mkdir(parents=True, exist_ok=True)
+    request_path, response_path = address / "request.json", address / "response.json"
+    # These are transient Host/client control envelopes, never scientific data.
+    for path in (request_path, response_path):
+        path.unlink(missing_ok=True)
+    stopped = Event()
 
     def serve():
-        while True:
+        last_request = None
+        while not stopped.is_set():
             try:
-                with listener.accept() as connection:
-                    action = connection.recv_bytes(32).decode("ascii")
-                    if stopped:
-                        return
-                    try:
-                        result = experiments.evaluate(action)
-                    except Exception as exc:
-                        # Original failures stay private: a validation exception
-                        # may contain hidden task IDs, paths, or test contents.
-                        with optional_diagnostic("AR evaluator failure"):
-                            atomic_json(experiments.private / "evaluation_error.json",
-                                {"error_type": type(exc).__name__, "error": str(exc)})
-                        experiments.publish()
-                        result = {"status": "evaluation_error", "error_type": type(exc).__name__,
-                                  "error": str(exc) if isinstance(exc, CommandUsageError) else
-                                      "The fixed PCE runner did not produce a valid complete evaluation. No score was assigned.",
-                                  "pending": experiments.state.get("pending")}
-                    try:
-                        connection.send_bytes(json.dumps(result).encode("utf-8"))
-                    except (BrokenPipeError, EOFError, ConnectionResetError):
-                        # A disconnected tool cannot invalidate completed PCE.
-                        pass
-            except (EOFError, OSError, UnicodeError):
-                if stopped:
-                    return
+                request = json.loads(request_path.read_text())
+            except (FileNotFoundError, json.JSONDecodeError):
+                stopped.wait(0.1)
+                continue
+            if request["id"] == last_request:
+                stopped.wait(0.1)
+                continue
+            last_request = request["id"]
+            try:
+                result = experiments.evaluate(request["action"])
+            except Exception as exc:
+                # Validation failures can contain held-out task/test details.
+                with optional_diagnostic("AR evaluator failure"):
+                    atomic_json(experiments.private / "evaluation_error.json",
+                        {"error_type": type(exc).__name__, "error": str(exc)})
+                experiments.publish()
+                result = {"status": "evaluation_error", "error_type": type(exc).__name__,
+                          "error": str(exc) if isinstance(exc, CommandUsageError) else
+                              "The fixed PCE runner did not produce a valid complete evaluation. No score was assigned.",
+                          "pending": experiments.state.get("pending")}
+            # A delivery retry reuses this result; it never starts PCE again.
+            while not stopped.is_set():
+                try:
+                    atomic_json(response_path, {"id": last_request, "result": result})
+                    break
+                except OSError:
+                    stopped.wait(0.1)
 
     thread = Thread(target=serve, name="autoresearch-pce-command", daemon=True)
     thread.start()
     try:
         yield
     finally:
-        stopped = True
-        # Wake accept without a new model call or another experimental request.
-        with optional_diagnostic("AR command shutdown"):
-            with Client(str(address), family="AF_UNIX") as connection:
-                connection.send_bytes(b"stop")
+        stopped.set()
         thread.join(timeout=1)
-        listener.close()
 
 
 def run_autoresearch(config, *, backend_factory, conversation_factory=None):
@@ -168,9 +169,9 @@ def run_autoresearch(config, *, backend_factory, conversation_factory=None):
     factory = conversation_factory or CodexConversation
     with factory(model_config=config.model, container=boundary,
                  attempt_dir=experiments.private / "analysis") as agent:
-        # Reuse the existing writable output mount for the evaluator socket.
+        # Reuse the existing writable output mount for command envelopes.
         # No host project, validation directory or provider source is mounted.
-        with evaluation_command(experiments, agent.transport[3] / "pce.sock"):
+        with evaluation_command(experiments, agent.transport[3] / "pce-command"):
             try:
                 final, trajectory = agent.call_text(
                     system="Read /evidence/program.md and carry out its autoresearch experiment.",

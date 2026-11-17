@@ -47,14 +47,16 @@ pinned CLI, private authentication and mount handling. The script prototype's
 single-guide evaluator remains shared machinery, without its proposal loop.
 
 The new adapter supplies the private writable guide workspace and a small
-standard-library command bridge in the existing `/agent-output` mount:
+standard-library file-command bridge in the existing `/agent-output` mount:
 
 ```bash
 python3 /evidence/pce.py evaluate
 python3 /evidence/pce.py resume
 ```
 
-The client sends only the action name over a local socket. The Host snapshots
+The client sends an action and automatic request ID through bounded command
+files. Atomic replacement and a client lock prevent partial/stale or concurrent
+requests from being confused. The Host snapshots
 the exact guide bytes, invokes the shared evaluator, publishes training evidence
 and returns aggregate counts. It does not rewrite scientific outputs, run a
 second scheduler, unpickle Agent data or expose its source checkout. This is
@@ -103,7 +105,10 @@ Before inference, use `verify_codex_sif_startup.py --preflight-only
 --workspace-write --pce-command --generic-isolation-image --tool-network-disabled`
 with its normal image/model/output arguments. This no-model probe checks the
 command bridge inside the actual Native writable Linux sandbox. Local tests
-verify the real socket/client, Agent-owned Git rollback, exact guide retention,
+verify the real file-command/client, Agent-owned Git rollback, exact guide retention,
 training evidence, held-out isolation, budget and interruption recovery with
 external model/container execution injected. They do not prove the Linux
-connection boundary. There is no fallback to Host execution.
+connection boundary. A real no-model check found that the current tool network
+policy also rejects Unix-socket connections. The bridge therefore uses the
+already writable output directory, reusing atomic I/O without relaxing network
+or filesystem isolation. There is no socket fallback or Host execution.

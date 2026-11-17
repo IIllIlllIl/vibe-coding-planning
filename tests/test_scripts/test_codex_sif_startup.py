@@ -181,10 +181,10 @@ def test_ar_probe_exercises_real_command_bridge_with_external_sandbox_injected(t
             assert 'default_permissions="vibe-workspace"' in command
             if "/evidence/pce.py" in command:
                 assert command[-3:] == ["/image/python3", "/evidence/pce.py", "evaluate"]
-                result = evaluate(output / "pce.sock")
+                result = evaluate(output / "pce-command")
                 return SimpleNamespace(returncode=0, stdout=json.dumps(result), stderr="")
             return SimpleNamespace(returncode=0, stdout="", stderr="")
         monkeypatch.setattr(probe.subprocess, "run", run)
         checks = probe.verify("reflector", boundary, model, tmp_path, infer=False, pce_command=True)
-        assert len(commands) == 3 and checks[-1]["check"] == "pce_command_socket"
+        assert len(commands) == 3 and checks[-1]["check"] == "pce_command_files"
         assert checks[-1]["returncode"] == 0

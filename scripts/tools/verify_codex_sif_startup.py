@@ -81,13 +81,13 @@ def verify(role, boundary, model, attempt, *, infer, pce_command=False):
                     (boundary.evidence_dir / "pce.py").write_bytes(client.read_bytes())
                     probe = SimpleNamespace(private=attempt, publish=lambda: None,
                         evaluate=lambda action: {"status": "completed", "probe": "no-model-pce-command"})
-                    with evaluation_command(probe, output / "pce.sock"):
+                    with evaluation_command(probe, output / "pce-command"):
                         result = subprocess.run([*prefix, _codex_binary(effective), "sandbox",
                             *_permission_options(boundary.cwd, boundary.repository_writable, boundary.tool_network_disabled),
                             "--permission-profile", _permission_profile(boundary.repository_writable, boundary.tool_network_disabled),
                             "--cd", str(boundary.cwd), prefix[-2], "/evidence/pce.py", "evaluate"],
                             env=env, capture_output=True, text=True, check=False, timeout=30)
-                    checks.append({"check": "pce_command_socket", "returncode": result.returncode,
+                    checks.append({"check": "pce_command_files", "returncode": result.returncode,
                                    "stdout": result.stdout, "stderr": result.stderr})
                     write_json(attempt / "preflight.json", checks)
                     if result.returncode or '"probe": "no-model-pce-command"' not in result.stdout:

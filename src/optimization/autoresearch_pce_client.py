@@ -1,21 +1,37 @@
 """Agent-side command for the fixed PCE evaluator; standard-library IPC only."""
 import argparse
+import fcntl
 import json
-from multiprocessing.connection import Client
+from pathlib import Path
+import time
+import uuid
 
 
 def evaluate(address, action="evaluate"):
-    # send_bytes/recv_bytes never unpickle data from the research Agent.
-    with Client(str(address), family="AF_UNIX") as connection:
-        connection.send_bytes(action.encode("ascii"))
-        return json.loads(connection.recv_bytes().decode("utf-8"))
+    address = Path(address)
+    # Serial callers share two bounded control files, not an accumulating queue.
+    # The ID is generated here, never copied or reconstructed by the Agent.
+    with (address / "client.lock").open("a+") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        identifier = uuid.uuid4().hex
+        temporary = address / "request.tmp"
+        temporary.write_text(json.dumps({"id": identifier, "action": action}))
+        temporary.replace(address / "request.json")
+        while True:
+            try:
+                response = json.loads((address / "response.json").read_text())
+            except (FileNotFoundError, json.JSONDecodeError):
+                response = {}
+            if response.get("id") == identifier:
+                return response["result"]
+            time.sleep(0.1)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=("evaluate", "resume"))
     args = parser.parse_args()
-    result = evaluate("/agent-output/pce.sock", args.action)
+    result = evaluate("/agent-output/pce-command", args.action)
     # These are Host facts, not an Agent-authored Plan, patch or guide.
     print(json.dumps(result, ensure_ascii=False, indent=2))
     for split in ("train", "validation"):

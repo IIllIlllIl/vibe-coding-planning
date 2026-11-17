@@ -168,8 +168,11 @@ is reserved for incomplete batches that cannot enter replay.
 
 Agent-owned guide research reuses the same Native SIF writable workspace,
 Safe PCE backend, single-guide evaluator and lossless training evidence writer.
-The pinned AR program owns research decisions; its local command bridge is
-only a capability to invoke that fixed evaluator. Keep held-out case contents
+The pinned AR program owns research decisions; its file-command bridge is
+only a capability to invoke that fixed evaluator. The tool network policy also
+blocks Unix sockets; use bounded control files in the existing output mount and
+shared atomic saves rather than changing isolation. These control envelopes
+are not Agent scientific outputs or scoring authority. Keep held-out case contents
 off the research mounts. Verify the bridge through the existing startup tool's
 `--workspace-write --preflight-only --pce-command` branch before inference;
 do not solve a missing connection by exposing the Host project or running

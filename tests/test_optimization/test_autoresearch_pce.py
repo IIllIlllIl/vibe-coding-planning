@@ -72,21 +72,21 @@ def test_agent_owns_experiments_and_discard_without_host_proposal_loop(tmp_path,
             git("add", "guide.md")
             git("-c", "commit.gpgsign=false", "commit", "-m", "seed baseline")
             baseline = git("rev-parse", "HEAD")
-            socket = self.transport[3] / "pce.sock"
-            seed = command(socket)
+            channel = self.transport[3] / "pce-command"
+            seed = command(channel)
             assert seed["train"]["resolved"] == 0 and seed["validation"]["resolved"] == 1
             guide = b"# Explore\r\nCheck {{ meaning }} and {% syntax %}.\r\n"
             (workspace / "guide.md").write_bytes(guide)
             git("add", "guide.md")
             git("-c", "commit.gpgsign=false", "commit", "-m", "experiment")
-            rejected = command(socket)
+            rejected = command(channel)
             assert rejected["train"]["resolved"] == 1 and rejected["validation"]["resolved"] == 0
             # The Agent, not Host selection, restores an earlier idea.
             git("reset", "--hard", baseline)
             assert (workspace / "guide.md").read_bytes() == chosen
-            revisited = command(socket)
+            revisited = command(channel)
             assert revisited["validation"]["resolved"] == 1
-            assert command(socket) == {"status": "budget_exhausted", "experiments_remaining": 0}
+            assert command(channel) == {"status": "budget_exhausted", "experiments_remaining": 0}
             (workspace / "results.tsv").write_text("commit\ttrain_score\tval_score\tstatus\tdescription\n")
             for path in self.container.evidence_dir.rglob("*"):
                 if path.is_file():
@@ -140,8 +140,8 @@ def test_validation_failure_is_not_a_score_or_a_hidden_evidence_channel(tmp_path
     monkeypatch.setattr(safe_pce_learning, "execute_pce", incomplete)
     experiments = ar.PCEExperiments(config, SafePCEBackend)
     with tempfile.TemporaryDirectory(prefix="ar-command-") as directory:
-        with ar.evaluation_command(experiments, Path(directory) / "pce.sock"):
-            result = command(Path(directory) / "pce.sock")
+        with ar.evaluation_command(experiments, Path(directory) / "pce-command"):
+            result = command(Path(directory) / "pce-command")
     assert result["status"] == "evaluation_error" and "validation" not in result
     assert "Org__Repo-7" not in json.dumps(result)
     assert "Org__Repo-7" in (experiments.private / "evaluation_error.json").read_text()
@@ -154,8 +154,8 @@ def test_guide_feedback_is_actionable_and_never_rewrites_guide(tmp_path, monkeyp
     experiments = ar.PCEExperiments(config, SafePCEBackend)
     experiments.guide.write_text("")
     with tempfile.TemporaryDirectory(prefix="ar-command-") as directory:
-        with ar.evaluation_command(experiments, Path(directory) / "pce.sock"):
-            result = command(Path(directory) / "pce.sock")
+        with ar.evaluation_command(experiments, Path(directory) / "pce-command"):
+            result = command(Path(directory) / "pce-command")
     assert "nonempty UTF-8" in result["error"]
     assert experiments.guide.read_bytes() == b"" and "pending" not in experiments.state
 
@@ -197,3 +197,43 @@ def test_ar_sources_and_mapping_are_explicit_without_training_dependency():
     config = load_config(ROOT / "configs/autoresearch_pce.example.yaml")
     assert config.mode == "autoresearch_pce" and config.max_experiments == 3
     assert config.program == ROOT / lock["adaptation"]
+
+
+def test_file_commands_work_without_sockets_and_serialize_concurrent_callers(tmp_path, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from types import SimpleNamespace
+    import socket
+    monkeypatch.setattr(socket, "socket", lambda *a, **kw: pytest.fail("network/sockets must remain unused"))
+    calls = []
+    def evaluate(action):
+        calls.append(action)
+        return {"status": "completed", "sequence": len(calls)}
+    engine = SimpleNamespace(evaluate=evaluate)
+    channel = tmp_path / "pce-command"
+    with ar.evaluation_command(engine, channel):
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            values = list(pool.map(lambda _: command(channel), range(3)))
+    assert sorted(value["sequence"] for value in values) == [1, 2, 3]
+    assert calls == ["evaluate"] * 3
+    assert {path.name for path in channel.iterdir() if not path.name.startswith(".")} == {
+        "request.json", "response.json", "client.lock"}
+
+
+def test_response_delivery_retry_does_not_repeat_the_experiment(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    save, calls, attempts = ar.atomic_json, [], []
+    def deliver(path, value):
+        if Path(path).name == "response.json":
+            attempts.append(value)
+            if len(attempts) == 1:
+                raise OSError("synthetic control-file delivery failure")
+        return save(path, value)
+    def evaluate(action):
+        calls.append(action)
+        return {"status": "completed"}
+    monkeypatch.setattr(ar, "atomic_json", deliver)
+    channel = tmp_path / "pce-command"
+    with ar.evaluation_command(SimpleNamespace(evaluate=evaluate), channel):
+        assert command(channel) == {"status": "completed"}
+    assert calls == ["evaluate"] and len(attempts) == 2
+    assert attempts[0] == attempts[1]
