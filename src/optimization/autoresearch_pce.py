@@ -39,6 +39,13 @@ class PCEExperiments:
             for key, value in (("user.name", "Autoresearch Agent"), ("user.email", "research@example.invalid")):
                 subprocess.run(["git", "-C", str(self.workspace), "config", key, value], check=True)
         _write_bytes(self.workspace / ".gitignore", b"results.tsv\nrun.log\n.vibe-private-artifacts\n")
+        # The shared writable Native preflight reads HEAD before model use.
+        # This is a mechanical seed/setup commit, not a learned proposal.
+        if subprocess.run(["git", "-C", str(self.workspace), "rev-parse", "--verify", "HEAD"],
+                          capture_output=True).returncode:
+            subprocess.run(["git", "-C", str(self.workspace), "add", "guide.md", ".gitignore"], check=True)
+            subprocess.run(["git", "-C", str(self.workspace), "-c", "commit.gpgsign=false",
+                            "commit", "-m", "Seed planning guide"], check=True, capture_output=True)
         self.publish()
 
     @property

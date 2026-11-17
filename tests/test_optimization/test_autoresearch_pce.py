@@ -69,9 +69,8 @@ def test_agent_owns_experiments_and_discard_without_host_proposal_loop(tmp_path,
             workspace = self.container.repository_dir
             def git(*args):
                 return subprocess.check_output(["git", "-C", str(workspace), *args], text=True).strip()
-            git("add", "guide.md")
-            git("-c", "commit.gpgsign=false", "commit", "-m", "seed baseline")
             baseline = git("rev-parse", "HEAD")
+            assert subprocess.check_output(["git", "-C", str(workspace), "show", "HEAD:guide.md"]) == chosen
             channel = self.transport[3] / "pce-command"
             seed = command(channel)
             assert seed["train"]["resolved"] == 0 and seed["validation"]["resolved"] == 1
@@ -237,3 +236,16 @@ def test_response_delivery_retry_does_not_repeat_the_experiment(tmp_path, monkey
         assert command(channel) == {"status": "completed"}
     assert calls == ["evaluate"] and len(attempts) == 2
     assert attempts[0] == attempts[1]
+
+
+def test_workspace_has_seed_head_before_native_preflight_and_resume_keeps_it(tmp_path):
+    config = config_for(tmp_path)
+    experiments = ar.PCEExperiments(config, SafePCEBackend)
+    workspace = experiments.workspace
+    head = subprocess.check_output(["git", "-C", str(workspace), "rev-parse", "HEAD"])
+    assert subprocess.check_output(["git", "-C", str(workspace), "show", "HEAD:guide.md"]) == config.seed.read_bytes()
+    # The shared Native sandbox checks this exact Git prerequisite before inference.
+    subprocess.run(["git", "-C", str(workspace), "read-tree", "HEAD"], check=True)
+    assert subprocess.check_output(["git", "-C", str(workspace), "status", "--porcelain"]) == b""
+    ar.PCEExperiments(config, SafePCEBackend)
+    assert subprocess.check_output(["git", "-C", str(workspace), "rev-parse", "HEAD"]) == head

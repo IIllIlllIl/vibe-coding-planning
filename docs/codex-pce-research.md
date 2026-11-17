@@ -31,6 +31,9 @@ commit the guide, invoke PCE, compare aggregate scores, record the result, and
 keep or discard the change. The Host neither requests a proposal each round
 nor chooses the incumbent. A rollback affects only this private guide Git
 repository; every evaluated guide survives as an immutable snapshot.
+Workspace preparation mechanically commits the supplied seed and ignore file
+before Native startup: the existing writable-workspace preflight requires a
+valid Git HEAD. Resume retains that commit and never creates a new proposal.
 
 The guide's format, organization, content and length are free. ACE operations,
 rule IDs, counters, bullet limits and required delegation are not part of this
