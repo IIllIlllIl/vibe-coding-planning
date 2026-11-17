@@ -222,7 +222,7 @@ def test_response_delivery_retry_does_not_repeat_the_experiment(tmp_path, monkey
     from types import SimpleNamespace
     save, calls, attempts = ar.atomic_json, [], []
     def deliver(path, value):
-        if Path(path).name == "response.json":
+        if Path(path).name == "response.json" and "result" in value:
             attempts.append(value)
             if len(attempts) == 1:
                 raise OSError("synthetic control-file delivery failure")
@@ -249,3 +249,121 @@ def test_workspace_has_seed_head_before_native_preflight_and_resume_keeps_it(tmp
     assert subprocess.check_output(["git", "-C", str(workspace), "status", "--porcelain"]) == b""
     ar.PCEExperiments(config, SafePCEBackend)
     assert subprocess.check_output(["git", "-C", str(workspace), "rev-parse", "HEAD"]) == head
+
+
+def test_live_request_acknowledges_and_publishes_pending_before_pce_returns(tmp_path, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+    config = config_for(tmp_path)
+    calls = _executor(monkeypatch)
+    from src.optimization import safe_pce_learning
+    execute = safe_pce_learning.execute_pce
+    started, release, received = Event(), Event(), Event()
+    def blocked(*args, **kwargs):
+        started.set()
+        assert release.wait(5)
+        return execute(*args, **kwargs)
+    monkeypatch.setattr(safe_pce_learning, "execute_pce", blocked)
+    experiments = ar.PCEExperiments(config, SafePCEBackend)
+    notices = []
+    def notice(message):
+        notices.append(message)
+        if message.startswith("Host received"):
+            received.set()
+    channel = tmp_path / "pce-command"
+    with ar.evaluation_command(experiments, channel), ThreadPoolExecutor() as pool:
+        future = pool.submit(command, channel, on_progress=notice)
+        try:
+            assert started.wait(5) and received.wait(5)
+            manifest = json.loads((experiments.evidence / "manifest.json").read_text())
+            checkpoint = json.loads((experiments.private / "state.json").read_text())
+            assert manifest["pending"] == checkpoint["pending"]
+            assert manifest["pending"]["round"] == 0 and not manifest["rounds"]
+            assert not future.done() and calls == []
+        finally:
+            release.set()
+        assert future.result(timeout=5)["status"] == "completed"
+    assert notices[0].startswith("Request sent")
+    assert len(calls) == 2 and "Org__Repo-7" not in str(notices)
+    manifest = json.loads((experiments.evidence / "manifest.json").read_text())
+    assert manifest["pending"] is None and len(manifest["rounds"]) == 1
+
+
+def test_progress_notification_failures_do_not_cancel_or_repeat_pce(tmp_path, monkeypatch):
+    config = config_for(tmp_path)
+    calls = _executor(monkeypatch)
+    experiments = ar.PCEExperiments(config, SafePCEBackend)
+    publish, save = ar.publish_research, ar.atomic_json
+    def broken_pending(evidence, state, **kwargs):
+        if state.get("pending"):
+            raise OSError("progress view unavailable")
+        return publish(evidence, state, **kwargs)
+    def broken_ack(path, value):
+        if "progress" in value:
+            raise OSError("acknowledgment unavailable")
+        return save(path, value)
+    def broken_display(message):
+        raise BrokenPipeError("display unavailable")
+    monkeypatch.setattr(ar, "publish_research", broken_pending)
+    monkeypatch.setattr(ar, "atomic_json", broken_ack)
+    channel = tmp_path / "pce-command"
+    with ar.evaluation_command(experiments, channel):
+        assert command(channel, on_progress=broken_display)["status"] == "completed"
+    assert len(calls) == 2 and len(experiments.state["rounds"]) == 1
+
+
+def test_formal8_binding_keeps_full_frozen_pce_and_counts_seed_separately():
+    config = load_config(ROOT / "configs/autoresearch_pce_rpg_formal8_v1_20261118.yaml")
+    assert config.max_experiments == 9
+    assert config.snapshot.name == "safe-pce-ace-rpg-codex-diag6-v1-20261102-inputs"
+    assert config.pce_config == ROOT / "configs/autoresearch_pce_rpg_window5_source_v1_20261118.yaml"
+    assert config.seed == ROOT / "configs/prompts/planning_guide_seed.md"
+    assert config.model["model"] == "gpt-6-sol" and config.model["reasoning_effort"] == "high"
+    assert "AI agent" in config.goal and "across tasks and repositories" in config.goal
+    assert "46 training and 15 validation" in config.evaluation_wait_hint
+    from src.optimization.safe_pce_execution import load_pce_config
+    if (config.snapshot / "pce_source/base_pce.yaml").is_file():
+        _, baseline = load_pce_config(config.snapshot / "pce_source/base_pce.yaml")
+        _, effective = load_pce_config(config.pce_config)
+        assert effective.pce_window_size == 5
+        for name in ("plan_prompt", "plan_instance_template", "code_prompt", "code_instance_template",
+                     "plan", "code", "container", "agent_backends", "code_submission_protocol"):
+            if hasattr(baseline, name):
+                assert getattr(effective, name) == getattr(baseline, name)
+
+
+def test_owner_resume_preserves_prior_native_evidence_and_finished_evaluations(tmp_path, monkeypatch):
+    config = config_for(tmp_path)
+    calls = _executor(monkeypatch)
+    directories = []
+    class Agent:
+        def __init__(self, *, model_config, container, attempt_dir):
+            directories.append(attempt_dir)
+            self.container = container
+            self.temporary = tempfile.TemporaryDirectory(prefix="ar-resume-test-")
+            self.transport = (None, None, None, Path(self.temporary.name))
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            self.temporary.cleanup()
+        def session_evidence(self):
+            return [{"text": f"owner {len(directories)}"}]
+        def call_text(self, **kwargs):
+            channel = self.transport[3] / "pce-command"
+            if len(directories) == 1:
+                assert command(channel)["experiment"] == 0
+                raise InterruptedError("synthetic owner interruption")
+            manifest = json.loads((self.container.evidence_dir / "manifest.json").read_text())
+            assert len(manifest["rounds"]) == 1
+            (self.container.repository_dir / "guide.md").write_text("# Explore\nInvestigate.")
+            assert command(channel)["experiment"] == 1
+            assert command(channel)["experiment"] == 2
+            return "Finished", []
+    monkeypatch.setattr(ar, "CodexConversation", Agent)
+    with pytest.raises(InterruptedError):
+        run_research(config)
+    previous = (directories[0] / "analysis-sessions.json").read_bytes()
+    assert len(run_research(config)) == 3
+    assert directories[0] != directories[1] and len(calls) == 6
+    assert (directories[0] / "analysis-sessions.json").read_bytes() == previous
+    assert json.loads((directories[1] / "analysis-sessions.json").read_text()) == [{"text": "owner 2"}]

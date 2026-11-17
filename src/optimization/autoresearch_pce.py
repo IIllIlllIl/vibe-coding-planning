@@ -88,7 +88,8 @@ class PCEExperiments:
         try:
             row = evaluate_research_guide(self.config, binding=self.binding, backend=self.backend,
                 train=self.train, validation=self.validation, private=self.private,
-                evidence=self.evidence, state=self.state, index=index, path=path)
+                evidence=self.evidence, state=self.state, index=index, path=path,
+                on_pending=self.publish)
         except Exception:
             # A failed required save must not leave an in-memory experiment
             # count ahead of its authoritative checkpoint on the next command.
@@ -127,6 +128,12 @@ def evaluation_command(experiments, address):
                 stopped.wait(0.1)
                 continue
             last_request = request["id"]
+            # Progress is operator information, not a score or another request.
+            with optional_diagnostic("AR command acknowledgment"):
+                atomic_json(response_path, {"id": last_request, "progress": {
+                    "status": "host_received", "message": "Host received the PCE request.",
+                    "wait_hint": getattr(getattr(experiments, "config", None),
+                        "evaluation_wait_hint", "PCE duration varies by task and queue.")}})
             try:
                 result = experiments.evaluate(request["action"])
             except Exception as exc:
@@ -134,7 +141,8 @@ def evaluation_command(experiments, address):
                 with optional_diagnostic("AR evaluator failure"):
                     atomic_json(experiments.private / "evaluation_error.json",
                         {"error_type": type(exc).__name__, "error": str(exc)})
-                experiments.publish()
+                with optional_diagnostic("AR error progress notification"):
+                    experiments.publish()
                 result = {"status": "evaluation_error", "error_type": type(exc).__name__,
                           "error": str(exc) if isinstance(exc, CommandUsageError) else
                               "The fixed PCE runner did not produce a valid complete evaluation. No score was assigned.",
@@ -173,9 +181,16 @@ def run_autoresearch(config, *, backend_factory, conversation_factory=None):
         repository_dir=experiments.workspace, repository_writable=True,
         interpreter="/usr/local/bin/python3", tool_network_disabled=True,
         output_files=("research_final.md",))
+    # A resumed owner starts a fresh Native conversation; retain its predecessor.
+    analysis = experiments.private / "analysis"
+    analysis.mkdir(exist_ok=True)
+    number = 1
+    while (attempt := analysis / f"attempt_{number:04d}").exists():
+        number += 1
+    attempt.mkdir()
     factory = conversation_factory or CodexConversation
     with factory(model_config=config.model, container=boundary,
-                 attempt_dir=experiments.private / "analysis") as agent:
+                 attempt_dir=attempt) as agent:
         # Reuse the existing writable output mount for command envelopes.
         # No host project, validation directory or provider source is mounted.
         with evaluation_command(experiments, agent.transport[3] / "pce-command"):
@@ -186,10 +201,10 @@ def run_autoresearch(config, *, backend_factory, conversation_factory=None):
                     user="Setup is prepared in /testbed. The objective, approved experiment budget and complete history inventory are in /evidence/GOAL.md and /evidence/manifest.json.",
                     output_filename="research_final.md")
                 with optional_diagnostic("AR research session"):
-                    atomic_json(experiments.private / "analysis-turn.json", {"final": final, "trajectory": trajectory})
+                    atomic_json(attempt / "analysis-turn.json", {"final": final, "trajectory": trajectory})
             finally:
                 with optional_diagnostic("AR Native session archive"):
-                    atomic_json(experiments.private / "analysis-sessions.json", agent.session_evidence())
+                    atomic_json(attempt / "analysis-sessions.json", agent.session_evidence())
                 with optional_diagnostic("AR exit status"):
                     atomic_json(experiments.private / "research_exit.json", {
                         "status": "budget_exhausted" if len(experiments.state["rounds"]) == experiments.budget

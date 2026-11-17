@@ -20,8 +20,8 @@ Setup and the experiment budget are already authorized.
 ## Experimentation
 
 Each experiment evaluates one guide using the same frozen training and validation
-tasks. A Planner receives the task, frozen repository and guide. A fresh Coder
-implements its Plan. The official evaluator assigns one point for a resolved
+tasks. An AI planning agent (Planner) receives the task, frozen repository and
+guide. A fresh Coder implements its Plan. The official evaluator assigns one point for a resolved
 task and zero otherwise. Launch an experiment with:
 
 ```bash
@@ -39,8 +39,8 @@ python3 /evidence/pce.py evaluate > run.log 2>&1
 - Validation feedback consists of aggregate resolved counts and totals. The
   validation task contents and execution records are outside this workspace.
 
-**The goal is simple: improve the validation resolved rate with a readable,
-reusable planning guide.** The training experiments explain what happened and
+**The goal is simple: improve the validation resolved rate with a generalized,
+human-readable planning guide.** The training experiments explain what happened and
 help you develop the next idea. The same approved PCE execution is used for
 every guide.
 
@@ -61,6 +61,10 @@ train_score: 0.666667
 validation_score: 0.733333
 status: completed
 ```
+
+Startup messages distinguish a request sent by the client from acknowledgment
+by the Host. While PCE runs, the same command prints waiting notices. Any wait
+estimate is informational; it is not a deadline, score or additional experiment.
 
 Extract the summary with:
 

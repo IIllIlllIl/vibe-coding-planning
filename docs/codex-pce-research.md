@@ -65,6 +65,14 @@ and returns aggregate counts. It does not rewrite scientific outputs, run a
 second scheduler, unpickle Agent data or expose its source checkout. This is
 the interface needed to let the isolated Agent start the existing experiment.
 
+The same response file carries a best-effort Host acknowledgment before PCE
+and the final result afterwards. The client flushes startup and minute-spaced
+waiting notices to `run.log`, distinguishing sent from received. An optional
+`execution.evaluation_wait_hint` describes expected waiting, not a timeout.
+After the authoritative pending checkpoint is saved, its existing public
+manifest view is refreshed before PCE starts. Notification/display failures
+neither cancel nor repeat PCE and cannot create a provisional score.
+
 ## Evidence and stopping boundaries
 
 Codex sees a writable `/testbed` research workspace and read-only `/evidence`:
@@ -88,6 +96,8 @@ Resume uses a pending frozen guide and completed PCE outputs without consuming
 a new experiment or replacing the working guide. Required saves reuse atomic
 I/O retry. After owner-process interruption a fresh Codex conversation reads
 retained Git/TSV/evidence; Native thread restoration is not implemented.
+Each owner has a separate `private/analysis/attempt_NNNN` evidence directory,
+so recovery preserves the previous Native conversation rather than replacing it.
 Diagnostic archive failures do not invalidate completed scientific records.
 
 ## Configuration and acceptance
@@ -115,3 +125,43 @@ connection boundary. A real no-model check found that the current tool network
 policy also rejects Unix-socket connections. The bridge therefore uses the
 already writable output directory, reusing atomic I/O without relaxing network
 or filesystem isolation. There is no socket fallback or Host execution.
+
+Terminal deployment acceptance is retained in
+`run_state/output/SWE-RPG/autoresearch-pce-rpg-smoke-v1-20261117`, source
+`7c08332`, owner job `6345151`: three guide evaluations and all six PCE
+observations completed. Worker/checkpoint handoffs, exact guide/Plan binding,
+lossless training records and held-out content isolation were checked. This
+two-task smoke is not formal learning evidence. Its pending manifest was not
+refreshed until evaluation completion, causing unnecessary liveness diagnosis;
+bulk training reads also hit Native tool return limits before targeted re-reading.
+The Agent retained its first update using improved training performance at a
+perfect validation baseline, rather than strict validation-only selection.
+Real discard, retry and cross-owner recovery branches remain outside this
+successful smoke's runtime coverage.
+
+## Full RPG binding
+
+[`autoresearch_pce_rpg_formal8_v1_20261118.yaml`](../configs/autoresearch_pce_rpg_formal8_v1_20261118.yaml)
+uses the unchanged formal RPG source: 46 training tasks, 15 validation tasks,
+92 original training reference files and the independent downstream test split.
+The six-word free-text seed is unchanged. Nine evaluation slots mean the Seed
+plus at most eight updates: 549 PCE observations before retries. All roles use
+Native `gpt-6-sol` / `high`; official scores, P/C/E prompts, three-attempt Worker
+policy and separate preparation remain inherited from the source. The
+[operational PCE binding](../configs/autoresearch_pce_rpg_window5_source_v1_20261118.yaml)
+reduces the case window from 8 to 5 for inode headroom; it imports the frozen
+prompts rather than duplicating them. Frozen task/reference inputs are reused.
+AR evaluates full train and validation for each submitted guide, whereas the
+GEPA comparator samples training minibatches and gates validation. Compare
+evaluation counts and wall time alongside proposal count.
+
+The owner launch uses the established `ulhpc-submit` entry, Iris 1 CPU / 4G,
+with a 48-hour wall-clock limit (the current batch maximum). That is an upper
+limit, not an ETA or an instruction to spend the entire allocation. There is
+no ten-hour stopping condition; partial completed guides can be analyzed while
+the experiment continues. There is
+no automatic owner resubmission: after interruption, verify worker state and
+restart the same committed binding to continue retained PCE/checkpoints. A new
+Native conversation reads durable history, as described above. Worker deadlines
+and attempts are unchanged. Launch arguments and current storage checks belong
+in private operational evidence, not in the optimizer's scientific input bundle.

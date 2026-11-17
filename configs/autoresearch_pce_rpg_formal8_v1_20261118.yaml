@@ -1,0 +1,31 @@
+# Seed + eight Agent-authored updates. Preparation is not launch authorization.
+mode: autoresearch_pce
+program: configs/prompts/autoresearch_pce_program.md
+paths:
+  dataset_snapshot: output/SWE-RPG/safe-pce-ace-rpg-codex-diag6-v1-20261102-inputs
+  safe_pce_config: configs/autoresearch_pce_rpg_window5_source_v1_20261118.yaml
+  seed_guide: configs/prompts/planning_guide_seed.md
+  run_dir: output/SWE-RPG/autoresearch-pce-rpg-formal8-v1-20261118
+goal: |
+  Develop a generalized, human-readable guide that helps an AI agent produce
+  better software implementation plans across tasks and repositories.
+  Use training experiments and their history to improve the guide.
+  Maximize the aggregate task-resolution rate on the fixed validation set.
+max_experiments: 9
+execution:
+  backend: hpc_slurm
+  evaluation_wait_hint: >-
+    This evaluation runs 46 training and 15 validation tasks in sequential
+    windows of at most 5 cases. The completed two-task pilot needed about
+    20-30 minutes per guide; this full selection requires multiple hours.
+    Queue delays and retries can extend that duration.
+analysis:
+  sif_path: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache/codex-inspection_python312-rg14-v1.sif
+  sif_sha256: b383e57e939505cdd158205066e495f6e3ca7e9932000f1a1d3fe3e26a1f0277
+  model:
+    executor: codex_cli
+    codex_binary: ${HOME}/.local/lib/vibe-codex/0.160.1/bin/codex
+    codex_auth_file: ${HOME}/.codex/auth.json
+    codex_version: 0.160.1
+    model: gpt-6-sol
+    reasoning_effort: high

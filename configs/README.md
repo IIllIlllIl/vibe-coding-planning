@@ -10,7 +10,10 @@ lifetimes; see [the lifecycle contract](../docs/documentation-authority.md).
   AR protocol to Agent-owned guide research and the existing Safe PCE executor.
   The [two-task binding](autoresearch_pce_rpg_smoke_v1_20261117.yaml) retains the
   completed script-Codex smoke's inputs, models and three-experiment budget.
-  Neither config authorizes a launch. The [method contract](../docs/codex-pce-research.md)
+  The [full RPG binding](autoresearch_pce_rpg_formal8_v1_20261118.yaml) permits
+  Seed plus eight updates over 46 train / 15 validation tasks (549 PCE before
+  retries), with the same frozen PCE source. No config authorizes a launch.
+  The [method contract](../docs/codex-pce-research.md)
   owns this Agent-controlled loop. The superseded smoke-only
   [script-Codex prototype](archive/codex_pce_research/README.md) is archived,
   including its schema and binding; it is no longer an execution mode.

@@ -1,0 +1,68 @@
+# Operational binding of the completed formal RPG PCE source; only window size changes.
+schema_version: 1
+mode: swe_rpg_pce
+purpose: autoresearch_full_rpg_with_capacity_bounded_preparation
+paths:
+  dataset_snapshot: output/SWE-RPG/safe-pce-ace-rpg-codex-diag6-v1-20261102-inputs/pce_source
+  image_manifest: output/SWE-RPG/safe-pce-ace-rpg-codex-diag6-v1-20261102-inputs/pce_source/images.json
+  selection_manifest: output/SWE-RPG/safe-pce-ace-rpg-codex-diag6-v1-20261102-inputs/pce_source/selection_manifest.json
+  prompt_source_config: output/SWE-RPG/safe-pce-ace-rpg-codex-diag6-v1-20261102-inputs/pce_source/base_pce.yaml
+  run_dir: output/SWE-RPG/autoresearch-pce-rpg-formal8-v1-20261118/private/pce
+plan:
+  executor: codex_cli
+  model: gpt-6-sol
+  reasoning_effort: high
+  codex_binary: ${HOME}/.local/lib/vibe-codex/0.160.1/bin/codex
+  codex_auth_file: ${HOME}/.codex/auth.json
+  codex_version: 0.160.1
+  timeout: 1800
+  max_attempts: 3
+  submission_protocol: direct_human_markdown_v5
+code:
+  submission_protocol: split_code_test_v1
+  executor: codex_cli
+  model: gpt-6-sol
+  reasoning_effort: high
+  codex_binary: ${HOME}/.local/lib/vibe-codex/0.160.1/bin/codex
+  codex_auth_file: ${HOME}/.codex/auth.json
+  codex_version: 0.160.1
+  timeout: 1800
+  max_attempts: 3
+execution:
+  workspace_preparation: separate_slurm_v1
+  pce_window_size: 5
+  pce_runs_per_instance: 1
+docker:
+  workdir: /testbed
+  timeout: 1800
+  min_free_gb: 20
+  max_cached_images: 75
+container:
+  runtime: apptainer
+  module: tools/Apptainer
+  sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+  writable_tmpfs: true
+  network_disabled: true
+hpc:
+  submit: true
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  time: '01:00:00'
+  poll_interval_seconds: 120
+  task_output_grace_seconds: 300
+  missing_task_grace_seconds: 600
+  max_task_attempts: 3
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  python_bin: python3
+  job_name_prefix: autoresearch-pce-rpg-formal8-v1-20261118-pce
+  worker_config_path: configs/autoresearch_pce_rpg_window5_source_v1_20261118.yaml
+evaluator:
+  slurm_timeout_outcome: unknown
+experiment_contract:
+  engineering_baseline: output/SWE-RPG/safe-pce-ace-rpg-codex-diag6-v1-20261102-inputs/pce_source/base_pce.yaml
+  operational_delta: preparation_window_8_to_5_only
+  official_scoring_unchanged: true
+  prompt_and_model_settings_unchanged: true

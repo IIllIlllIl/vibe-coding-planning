@@ -38,6 +38,7 @@ class ResearchConfig:
     execution_backend: str = "local"
     mode: str = "autoresearch_pce"
     program: Path | None = None
+    evaluation_wait_hint: str = "PCE duration varies with task preparation, queueing and retries."
 
 
 def load_config(path):
@@ -62,7 +63,9 @@ def load_config(path):
     return ResearchConfig(resolve(paths["dataset_snapshot"]), resolve(paths["safe_pce_config"]),
         resolve(paths["seed_guide"]), resolve(paths["run_dir"]), raw["goal"],
         count,
-        codex_options(raw["analysis"]["model"]), resolve(raw["analysis"]["sif_path"]), digest, backend, mode, program)
+        codex_options(raw["analysis"]["model"]), resolve(raw["analysis"]["sif_path"]), digest, backend, mode, program,
+        raw.get("execution", {}).get("evaluation_wait_hint",
+            "PCE duration varies with task preparation, queueing and retries."))
 
 
 def _write_bytes(path, value):
@@ -127,7 +130,8 @@ def publish_research(evidence, state, **metadata):
             "rounds": state["rounds"], **metadata})
 
 
-def evaluate_research_guide(config, *, binding, backend, train, validation, private, evidence, state, index, path):
+def evaluate_research_guide(config, *, binding, backend, train, validation, private, evidence, state, index, path,
+                            on_pending=None):
     """One immutable guide through the same complete train/validation PCE chain."""
     guide = path.read_bytes().decode("utf-8")
     if not guide.strip():
@@ -138,6 +142,9 @@ def evaluate_research_guide(config, *, binding, backend, train, validation, priv
     state["pending"] = pending
     checkpoint = private / "state.json"
     atomic_json(checkpoint, state)
+    with optional_diagnostic("AR pending notification"):
+        if on_pending is not None:
+            on_pending()
     binding.run_dir = private / "pce" / f"round-{index:04d}"
     binding.hpc.job_name_prefix = config.run_dir.name + f"-r{index:04d}"
     reports = {}

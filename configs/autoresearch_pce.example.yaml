@@ -7,10 +7,10 @@ paths:
   seed_guide: configs/prompts/planning_guide_seed.md
   run_dir: .local/operations/autoresearch-pce/run
 goal: |
-  Develop a readable, reusable planning guide that helps a Planner produce
-  approaches leading to correct implementations across software tasks.
-  Use training experiments and their history to improve the guide. Maximize
-  the aggregate resolved rate on the fixed validation selection.
+  Develop a generalized, human-readable guide that helps an AI agent produce
+  better software implementation plans across tasks and repositories.
+  Use training experiments and their history to improve the guide.
+  Maximize the aggregate task-resolution rate on the fixed validation set.
 max_experiments: 3  # Includes the seed baseline; retries use the existing PCE policy.
 execution:
   backend: hpc_slurm
