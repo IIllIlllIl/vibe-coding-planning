@@ -30,10 +30,10 @@ def write_json(path, value):
     path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
 
 
-def verify(role, boundary, model, attempt, *, infer):
+def verify(role, boundary, model, attempt, *, infer, pce_command=False):
     if not infer:
         with _isolated_codex_environment(model) as environment:
-            with boundary.launch(model, environment, attempt) as (prefix, env, effective, _):
+            with boundary.launch(model, environment, attempt) as (prefix, env, effective, output):
                 checks = _runtime_preflight(
                     effective, working_directory=boundary.cwd, environment=env,
                     command_prefix=prefix,
@@ -74,6 +74,24 @@ def verify(role, boundary, model, attempt, *, infer):
                 write_json(attempt / "preflight.json", checks)
                 if completed.returncode:
                     raise RuntimeError(f"{role} substantive SIF check failed: {completed.stderr}")
+                if pce_command:
+                    from types import SimpleNamespace
+                    from src.optimization.autoresearch_pce import evaluation_command
+                    client = Path(__file__).resolve().parents[2] / "src/optimization/autoresearch_pce_client.py"
+                    (boundary.evidence_dir / "pce.py").write_bytes(client.read_bytes())
+                    probe = SimpleNamespace(private=attempt, publish=lambda: None,
+                        evaluate=lambda action: {"status": "completed", "probe": "no-model-pce-command"})
+                    with evaluation_command(probe, output / "pce.sock"):
+                        result = subprocess.run([*prefix, _codex_binary(effective), "sandbox",
+                            *_permission_options(boundary.cwd, boundary.repository_writable, boundary.tool_network_disabled),
+                            "--permission-profile", _permission_profile(boundary.repository_writable, boundary.tool_network_disabled),
+                            "--cd", str(boundary.cwd), prefix[-2], "/evidence/pce.py", "evaluate"],
+                            env=env, capture_output=True, text=True, check=False, timeout=30)
+                    checks.append({"check": "pce_command_socket", "returncode": result.returncode,
+                                   "stdout": result.stdout, "stderr": result.stderr})
+                    write_json(attempt / "preflight.json", checks)
+                    if result.returncode or '"probe": "no-model-pce-command"' not in result.stdout:
+                        raise RuntimeError("isolated AR PCE command could not reach its fixed evaluator")
                 return checks
     result, trajectory = run_codex_json_agent(
         container=boundary, model_config=model, working_directory=boundary.evidence_dir,
@@ -112,6 +130,8 @@ def main():
                         help="Disable only Native tool networking; retain CLI service networking")
     parser.add_argument("--workspace-write", action="store_true",
                         help="Also verify writable repository/Git-index policy without model calls")
+    parser.add_argument("--pce-command", action="store_true",
+                        help="With --workspace-write, verify AR's fixed evaluator command without a model or PCE")
     parser.add_argument("--repository-cwd", default="/testbed",
                         help="Frozen case repository path, e.g. /testbed2")
     parser.add_argument("--outer-isolation-only", action="store_true",
@@ -119,6 +139,8 @@ def main():
     args = parser.parse_args()
     if args.workspace_write and (not args.preflight_only or args.outer_isolation_only):
         parser.error("--workspace-write requires --preflight-only and the inner sandbox")
+    if args.pce_command and not args.workspace_write:
+        parser.error("--pce-command requires --workspace-write --preflight-only")
     args.output_dir.mkdir(parents=True, exist_ok=False)
     model = {"executor": "codex_cli", "codex_binary": args.codex_binary,
              "codex_auth_file": args.codex_auth_file, "codex_version": args.codex_version,
@@ -171,7 +193,8 @@ def main():
                     report["roles"][role] = {"sif_path": str(sif), "preflight": checks}
                 else:
                     report["roles"][role] = {"sif_path": str(sif), "preflight":
-                        verify(role, boundary, model, attempt, infer=False)}
+                        verify(role, boundary, model, attempt, infer=False,
+                               **({"pce_command": True} if args.pce_command and role == "reflector" else {}))}
                 write_json(args.output_dir / "report.json", report)
             if not args.preflight_only and not args.outer_isolation_only:
                 for role, (boundary, attempt) in boundaries.items():

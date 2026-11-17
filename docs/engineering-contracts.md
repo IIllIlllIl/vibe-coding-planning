@@ -166,6 +166,15 @@ is reserved for incomplete batches that cannot enter replay.
 
 ## Adaptation baseline and phase-graph checks
 
+Agent-owned guide research reuses the same Native SIF writable workspace,
+Safe PCE backend, single-guide evaluator and lossless training evidence writer.
+The pinned AR program owns research decisions; its local command bridge is
+only a capability to invoke that fixed evaluator. Keep held-out case contents
+off the research mounts. Verify the bridge through the existing startup tool's
+`--workspace-write --preflight-only --pce-command` branch before inference;
+do not solve a missing connection by exposing the Host project or running
+evaluation in the Agent workspace. See [the method mapping](codex-pce-research.md#autoresearch-migration).
+
 Identify the closest completed formal run before adapting a workflow. Compare
 its actual Agent phase graph, configuration, worker dispatch and regression
 tests; reusing low-level submission functions alone does not establish reuse

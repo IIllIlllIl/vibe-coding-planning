@@ -12,7 +12,9 @@ maintained implementation supports:
    and SWE-chat hybrid learning paths, for controlled comparisons and diagnosis.
 3. PCCE and fixed-rule probes through the existing shared components, when
    explicitly selected by a reviewed experiment.
-4. Shared Agent backends, isolation, prepared base history, evaluator adapters,
+4. Agent-owned [autoresearch guide optimization](codex-pce-research.md), under
+   active development over the same fixed Safe PCE execution path.
+5. Shared Agent backends, isolation, prepared base history, evaluator adapters,
    Slurm lifecycle, retry/checkpoint, storage and evidence utilities.
 
 The method owners are [Safe PCE](safe-pce.md),
@@ -42,7 +44,16 @@ new experiment inputs or permission to rerun them.
 Use one maintained entry point per recurring operational goal. Supply run
 variants as configuration, and archive completed date-specific wrappers and
 Supervisor identities. Current indexes point to owning contracts rather than
-mirroring operational history or live progress.
+mirroring operational history or live progress. Only active development and
+methods with formal-run evidence remain research entry points; a smoke does
+not promote a superseded method.
+
+The script-owned guide-Codex prototype is archived: its three-experiment
+engineering smoke was not formal training. Its dedicated proposal loop and
+loader route are removed; shared PCE/evidence/recovery code remains in use by
+AR. [Archive provenance](../configs/archive/codex_pce_research/README.md) identifies
+the original commit and terminal evidence. Formal ACE/GEPA, paired blocking
+and SWE-chat comparison implementations retain their separate contracts.
 
 Online GEPA/PCT/PCC and earlier Offline/Behavioral/PolyBench artifacts are
 historical unless a current implementation or regression explicitly reuses a

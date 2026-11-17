@@ -146,3 +146,45 @@ def test_startup_probe_uses_frozen_alternative_repository_path(tmp_path, monkeyp
     monkeypatch.setattr(probe, "verify", verify)
     probe.main()
     assert json.loads((output / "report.json").read_text())["status"] == "passed"
+
+
+def test_ar_probe_reuses_existing_gate_and_only_enables_command_for_writable_role(tmp_path, monkeypatch):
+    output = arguments(tmp_path, monkeypatch)
+    sys.argv.extend(["--workspace-write", "--preflight-only", "--pce-command"])
+    calls = []
+    def verify(role, boundary, model, attempt, *, infer, pce_command=False):
+        calls.append((role, boundary.repository_writable, infer, pce_command))
+        return []
+    monkeypatch.setattr(probe, "verify", verify)
+    probe.main()
+    assert calls == [("reflector", True, False, True), ("curator", False, False, False)]
+    assert json.loads((output / "report.json").read_text())["codex_sessions_attempted"] == 0
+
+
+def test_ar_probe_exercises_real_command_bridge_with_external_sandbox_injected(tmp_path, monkeypatch):
+    from pathlib import Path
+    from types import SimpleNamespace
+    import tempfile
+    from src.optimization.autoresearch_pce_client import evaluate
+    with tempfile.TemporaryDirectory(prefix="ar-probe-") as directory:
+        output = Path(directory)
+        boundary = probe.CodexSIFExecution(tmp_path / "case.sif", tmp_path,
+            repository_dir=tmp_path, repository_writable=True, tool_network_disabled=True)
+        model = {"executor": "codex_cli", "model": "test"}
+        monkeypatch.setattr(probe, "_isolated_codex_environment", lambda *_: nullcontext({}))
+        monkeypatch.setattr(probe.CodexSIFExecution, "launch",
+            lambda *a: nullcontext((["/image/python3", "/private_mount.py"], {}, model, output)))
+        monkeypatch.setattr(probe, "_runtime_preflight", lambda *a, **kw: [])
+        commands = []
+        def run(command, **kwargs):
+            commands.append(command)
+            assert 'default_permissions="vibe-workspace"' in command
+            if "/evidence/pce.py" in command:
+                assert command[-3:] == ["/image/python3", "/evidence/pce.py", "evaluate"]
+                result = evaluate(output / "pce.sock")
+                return SimpleNamespace(returncode=0, stdout=json.dumps(result), stderr="")
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        monkeypatch.setattr(probe.subprocess, "run", run)
+        checks = probe.verify("reflector", boundary, model, tmp_path, infer=False, pce_command=True)
+        assert len(commands) == 3 and checks[-1]["check"] == "pce_command_socket"
+        assert checks[-1]["returncode"] == 0

@@ -6,13 +6,14 @@ lifetimes; see [the lifecycle contract](../docs/documentation-authority.md).
 
 ## Maintained entry points
 
-- [Guide-only Codex research example](codex_pce_research.example.yaml) uses the
-  [persistent research loop](../docs/codex-pce-research.md), not GEPA selection.
-  It retains the same Safe PCE Worker and official scorer. The example has no
-  prepared local benchmark environment or launch authorization.
-  The [RPG two-task smoke](codex_pce_research_rpg_smoke_v1_20261116.yaml)
-  binds the HPC executor for seed plus two updates, with validation details
-  isolated from the learning conversation.
+- [Autoresearch PCE](autoresearch_pce.example.yaml) maps the pinned third-party
+  AR protocol to Agent-owned guide research and the existing Safe PCE executor.
+  The [two-task binding](autoresearch_pce_rpg_smoke_v1_20261117.yaml) retains the
+  completed script-Codex smoke's inputs, models and three-experiment budget.
+  Neither config authorizes a launch. The [method contract](../docs/codex-pce-research.md)
+  owns this Agent-controlled loop. The superseded smoke-only
+  [script-Codex prototype](archive/codex_pce_research/README.md) is archived,
+  including its schema and binding; it is no longer an execution mode.
 
 - Start a new launch identity from [hpc_supervisor.example.yaml](hpc_supervisor.example.yaml).
   Use the shared Supervisor; do not create a new launcher implementation.

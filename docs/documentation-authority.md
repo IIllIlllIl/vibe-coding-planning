@@ -62,6 +62,13 @@ and limitations belong in one knowledge or method document.
 
 ## Maintained Repository Surface
 
+Keep a research workflow in the ordinary navigation surface only while it is
+actively being developed or after it has had a formal run. A successful smoke
+alone does not qualify a superseded prototype. Archive its dedicated bindings
+and explanation, remove its obsolete execution route, and retain its source
+revision and evidence references for reproduction. Reusable execution/evidence
+components remain maintained when another retained workflow needs them.
+
 For one recurring operational goal, maintain one entry point and supply run
 differences as configuration. Archive completed date-specific wrappers rather
 than leaving them beside reusable tools. A missing static reference alone does

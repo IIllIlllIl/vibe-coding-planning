@@ -1,122 +1,109 @@
-# Codex guide research
+# Autoresearch planning-guide research
 
-This prototype replaces GEPA's search decisions with one persistent Codex
-conversation. It uses a free-text planning guide, complete training history,
-and aggregate validation feedback. It does not call GEPA optimization or
-require ACE operations, rule IDs, counters, or a checklist representation.
+The maintained entry is `scripts/run_codex_pce_research.py --config PATH`, with
+`mode: autoresearch_pce`. The Agent owns the research loop; the existing Safe
+PCE runner owns task execution and official scores. The superseded script-owned
+prototype has [archived bindings and source provenance](../configs/archive/codex_pce_research/README.md).
+It completed smoke only and is not a second maintained optimizer.
 
-## Execution and ownership
+## Autoresearch migration
 
-The maintained entry is `scripts/run_codex_pce_research.py --config PATH`.
-The [example config](../configs/codex_pce_research.example.yaml) describes its
-schema; it is not a prepared dataset or launch authorization.
+Karpathy's repository is pinned, unmodified, in `third_party/autoresearch` at
+`228791fb499afffb54b46200aca536f79142f117`.
+`third_party/autoresearch.version.json` binds the revision, upstream program
+hash, attribution and [adapted program](../configs/prompts/autoresearch_pce_program.md).
+AR supplies a research protocol in `program.md`, not a Python optimizer SDK.
+Its README declares MIT; this revision has no standalone LICENSE file.
+Upstream GPU training, PyTorch, tokenizers and datasets are not installed.
 
-The original seed and every submitted guide receive their own immutable
-snapshot and PCE round. Each round runs the same complete train and validation
-selections. There is no minibatch admission gate or automatic score-based
-rollback. Codex can return a previous guide if it chooses. Repeated guide text
-in another round is a new experiment, while resuming an interrupted round uses
-its existing PCE checkpoints and completed observations.
+| AR element | Project mapping | Ownership |
+|---|---|---|
+| `program.md` | Adapted Setup, Experimentation, Output, Logging and loop | Human-owned protocol, read by Codex |
+| Editable `train.py` | Free-text `guide.md` in a private Git workspace | Codex proposes and edits |
+| Fixed `prepare.py` / experiment command | Existing Safe PCE over frozen train/validation tasks | Host executes unchanged P/C/E |
+| Validation `val_bpb` | Aggregate official resolved rate, maximized | Official evaluator supplies scores |
+| Commit, run, TSV, keep/discard, simplicity preference | Private guide commits and `results.tsv` | Codex decides and records |
+| Continue until stopped | Approved `max_experiments`, including seed | Host enforces evaluation budget |
 
-`SafePCEBackend` reuses frozen task/split/reference loading, and the shared PCE
-materializer, Worker, phase checkpoints, source isolation, split code/test
-patches and official scorer. Free text is passed verbatim as Planner template data. The
-only prompt-binding change is replacing the checklist/numbering instruction
-with a free-guide application instruction; Planner system, Coder and evaluator
-remain unchanged. Existing structured ACE/GEPA bindings retain their original
-projection and instruction.
+A single Native Codex call reads the goal and full inventory, evaluates the
+unchanged seed, then repeats: inspect training evidence, form an idea, edit and
+commit the guide, invoke PCE, compare aggregate scores, record the result, and
+keep or discard the change. The Host neither requests a proposal each round
+nor chooses the incumbent. A rollback affects only this private guide Git
+repository; every evaluated guide survives as an immutable snapshot.
 
-The shared `CodexConversation.call_text` reuses Native transport, pinned CLI,
-private authentication and source isolation. Its tools have read-only evidence
-access; the CLI's final-response channel writes the guide file. Host snapshots
-those exact bytes. This is an artifact submission boundary, not unrestricted
-filesystem editing. Only the guide becomes a changed scientific input.
+The guide's format, organization, content and length are free. ACE operations,
+rule IDs, counters, bullet limits and required delegation are not part of this
+optimizer. This optimizer-level comparison keeps P/C/E semantics fixed but
+intentionally changes the research policy and guide representation.
 
-## Evidence and recovery
+## Reuse and the new adapter
 
-Only `analysis_inputs/` is mounted for the learning Agent. It contains the goal,
-all prior guide snapshots, lossless training records/views/references, and the
-aggregate train/validation feedback. Original validation tasks, individual
-outcomes, trajectories and evaluator artifacts remain under `private/`.
-Required/optional reading priorities are not imposed. Availability does not
-prove actual reading; inspect the retained Native session after a real run.
+Reused components are `SafePCEBackend`, PCE materialization, the Planner and
+independent Coder, official evaluator, prepared history, phase arrays, Worker
+retries/checkpoints, source isolation, atomic saves and lossless training-record
+indexes. `CodexConversation` and `CodexSIFExecution` retain Native transport,
+pinned CLI, private authentication and mount handling. The script prototype's
+single-guide evaluator remains shared machinery, without its proposal loop.
 
-Aggregate validation feedback is adaptive optimization information. Keep an
-independent downstream test split for final generalization assessment. Never
-feed those test cases into this loop.
+The new adapter supplies the private writable guide workspace and a small
+standard-library command bridge in the existing `/agent-output` mount:
 
-## Comparison scope
+```bash
+python3 /evidence/pce.py evaluate
+python3 /evidence/pce.py resume
+```
 
-The experimental intervention is replacement of the guide optimizer as a
-whole: GEPA search decisions and fresh per-proposal reflection are replaced by
-persistent Codex optimization. Free guide text, accumulated training history,
-aggregate validation feedback, and removal of the GEPA minibatch admission
-gate are intentional parts of that replacement. They do not, by themselves,
-invalidate an optimizer-level ablation. Result attribution is to the complete
-optimization strategy; isolating the effect of only memory, format, or a
-selection gate would require a narrower follow-up comparison.
+The client sends only the action name over a local socket. The Host snapshots
+the exact guide bytes, invokes the shared evaluator, publishes training evidence
+and returns aggregate counts. It does not rewrite scientific outputs, run a
+second scheduler, unpickle Agent data or expose its source checkout. This is
+the interface needed to let the isolated Agent start the existing experiment.
 
-Outside this intervention, retain the frozen benchmark source and split
-membership, repository/base/SIF identities, training-reference policy, Planner
-base task and model, Coder task and model, evaluator, scoring, source isolation,
-and established PCE recovery. Replacing the checklist-specific rule-number
-instruction with free-guide application is the necessary Planner interface
-change; it does not change the Planner's base task or the Coder/evaluator.
+## Evidence and stopping boundaries
 
-The two-task subset is engineering-smoke scope, not a proposed replacement for
-the 46/15/16 formal split. Both seeds contain no learned domain guidance, but
-their exact text differs; report each seed's observed baseline rather than
-assuming equal scores. Full-set evaluation each round and GEPA minibatch
-screening consume different numbers of PCE calls, so compare learning curves
-alongside actual PCE/model-call and time budgets, not iteration count alone.
+Codex sees a writable `/testbed` research workspace and read-only `/evidence`:
+the goal/program, all evaluated guides, full training records/trajectories,
+configured original training references and aggregate train/validation feedback.
+Validation task inputs, per-case outcomes, trajectories and evaluator artifacts
+stay outside its mounts. Downstream test cases never enter the loop. Adaptive
+validation optimization still requires an independent final test.
 
-Run identity binds the PCE semantics, split hashes, seed, goal, analysis model
-and update budget. Required saves use the existing atomic I/O retry mechanism.
-Native submission/transport errors receive concrete feedback in the same
-conversation for up to three attempts. Configuration/permanent provider errors
-retain their existing classification. Diagnostic archive failures cannot block.
-An unusable output cannot become a fabricated score. Resume retains a pending
-guide and any completed training evaluation. A normal process keeps one Native
-conversation; after interruption, a fresh conversation can access all durable
-history, but this prototype does not restore its previous Native thread.
+`results.tsv` is Agent memory, not scoring authority. Immutable PCE records and
+checkpoints own results. A guide that performs badly remains available for
+analysis. Operationally incomplete evaluations do not become invented zeroes;
+public command failures hide held-out details, with full errors kept privately.
 
-## Deployment and acceptance boundary
+`max_experiments` includes the seed, while retries retain the existing PCE
+policy. The Agent may stop earlier; the exit record distinguishes an early
+return from spending the complete evaluation budget. PCE's existing phase and
+Slurm deadlines govern execution rather than AR's GPU-specific ten-minute kill.
 
-The driver selects the existing `local` or `hpc_slurm` PCE backend. The latter
-retains independent PCE/preparation array elements, task retries, phase
-checkpoints and exhausted-Agent finalization. A waiting yield returns to the
-same backend after its configured poll interval; it does not consume an Agent
-attempt or open another Native conversation. The local backend remains an
-explicit development path, not a fallback from Slurm, and calls Worker attempt
-one without those outer HPC recovery services.
+Resume uses a pending frozen guide and completed PCE outputs without consuming
+a new experiment or replacing the working guide. Required saves reuse atomic
+I/O retry. After owner-process interruption a fresh Codex conversation reads
+retained Git/TSV/evidence; Native thread restoration is not implemented.
+Diagnostic archive failures do not invalidate completed scientific records.
 
-The [two-task smoke](../configs/codex_pce_research_rpg_smoke_v1_20261116.yaml)
-uses one train task (`openai__openai-agents-python-454`) and one validation task
-(`pdm-project__pdm-2795`) from their original formal splits. Seed plus two
-updates requires six PCE observations and two learning turns before retries.
-The frozen PCE source and explicit Planner prompt come from the completed RPG
-20it baseline. Only the training task's original diagnostic references are
-available to the learning Agent. Frozen data and results stay in ignored roots.
+## Configuration and acceptance
 
-One bounded Iris 1 CPU / 4G Slurm job owns the persistent learning session while
-the established PCE executor submits benchmark tasks. Submission reuses
-`ulhpc-submit`, a committed source export including the pinned GEPA submodule,
-one fixed remote worktree, and an empty local submission metadata directory
-with `--no-sync` to avoid automatic dependency installation. There is no new
-Supervisor or P/C/E retry loop. Benchmark PCE and Native analysis require their
-verified Linux/Apptainer environments; there is no automatic Mac/Docker fallback.
-If the owner job is interrupted, durable guide/PCE checkpoints are reusable,
-but a new process opens a fresh learning conversation as described above.
+[Schema](../configs/autoresearch_pce.example.yaml) and
+[two-task binding](../configs/autoresearch_pce_rpg_smoke_v1_20261117.yaml) use the
+same frozen PCE source, seed, models and train/validation membership as the
+archived script smoke: one train task, one validation task, three evaluated
+guides, hence six PCE observations before retries. This is deployment scope,
+not a learning or generalization estimate. Configuration is not launch consent.
 
-`tests/test_optimization/test_codex_pce_research.py` uses one generated training
-task and one validation task, seed plus two updates. It executes the real
-loop, materialization, data binding, score validation and evidence writer with
-model/container execution injected. HPC yield acceptance also checks that
-resuming the shared executor preserves the learning conversation. These are
-no-model workflow checks, not real-model results or isolation-runtime proof.
+Deploy a committed source export with both pinned submodules (`gepa` and
+`autoresearch`); a parent-only Git archive leaves empty gitlink directories.
+Use the established `ulhpc-submit` staging and Slurm modules, not a new research
+Supervisor. The fixed PCE backend continues to own preparation and task arrays.
 
-The design follows [Goals](https://developers.openai.com/cookbook/examples/codex/using_goals_in_codex)
-and [autoresearch](https://github.com/karpathy/autoresearch/blob/master/program.md)
-as a persistent objective plus bounded experimental surface. The driver uses
-the established CLI session/resume transport; it does not assume that the
-interactive `/goal` command is a noninteractive API.
+Before inference, use `verify_codex_sif_startup.py --preflight-only
+--workspace-write --pce-command --generic-isolation-image --tool-network-disabled`
+with its normal image/model/output arguments. This no-model probe checks the
+command bridge inside the actual Native writable Linux sandbox. Local tests
+verify the real socket/client, Agent-owned Git rollback, exact guide retention,
+training evidence, held-out isolation, budget and interruption recovery with
+external model/container execution injected. They do not prove the Linux
+connection boundary. There is no fallback to Host execution.

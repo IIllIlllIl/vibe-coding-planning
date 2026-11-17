@@ -22,6 +22,16 @@ def repo(tmp_path):
     return tmp_path
 
 
+@pytest.mark.parametrize("path,private", [("third_party/upstream", False), ("output/private-module", True)])
+def test_submodule_gitlink_is_not_read_as_a_blob_and_keeps_private_path_checks(repo, path, private):
+    git(repo, "update-index", "--add", "--cacheinfo", "160000", "1" * 40, path)
+    report = check(repo, environ={})
+    if private:
+        assert report["findings"] == [{"file": path, "source": "index", "detectors": ["private_output_path"]}]
+    else:
+        assert report["findings"] == []
+
+
 def test_metadata_preserves_existing_payload_and_is_inherited(repo):
     private = repo / "custom-results"
     private.mkdir()

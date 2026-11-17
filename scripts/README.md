@@ -6,6 +6,13 @@ no script or configuration here authorizes execution by itself.
 
 ## Safe PCE / ACE Learning Preparation
 
+- `run_codex_pce_research.py --config PATH` runs the active AR adaptation:
+  Codex owns guide editing, invoking fixed PCE and keep/discard. Shared PCE
+  owns preparation, arrays, retries and scores. The smoke-only script-owned
+  proposal loop is archived, not another mode; see the
+  [method](../docs/codex-pce-research.md) and
+  [bindings](../configs/README.md#maintained-entry-points).
+
 - `tools/check_commit_safety.py` is the required pre-commit index review; it
   rejects marked/private artifacts and likely credentials, including forced
   additions. `--worktree` also reviews pending nonignored changes. It does not

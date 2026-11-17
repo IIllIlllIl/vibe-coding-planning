@@ -1,0 +1,26 @@
+# AR-owned research protocol over the same Safe PCE backend. No launch authorization.
+mode: autoresearch_pce
+program: configs/prompts/autoresearch_pce_program.md
+paths:
+  dataset_snapshot: .local/operations/autoresearch-pce/inputs
+  safe_pce_config: .local/operations/autoresearch-pce/inputs/pce_source/base_pce.yaml
+  seed_guide: configs/prompts/planning_guide_seed.md
+  run_dir: .local/operations/autoresearch-pce/run
+goal: |
+  Develop a readable, reusable planning guide that helps a Planner produce
+  approaches leading to correct implementations across software tasks.
+  Use training experiments and their history to improve the guide. Maximize
+  the aggregate resolved rate on the fixed validation selection.
+max_experiments: 3  # Includes the seed baseline; retries use the existing PCE policy.
+execution:
+  backend: hpc_slurm
+analysis:
+  sif_path: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache/codex-inspection_python312-rg14-v1.sif
+  sif_sha256: b383e57e939505cdd158205066e495f6e3ca7e9932000f1a1d3fe3e26a1f0277
+  model:
+    executor: codex_cli
+    codex_binary: ${HOME}/.local/lib/vibe-codex/0.160.1/bin/codex
+    codex_auth_file: ${HOME}/.codex/auth.json
+    codex_version: 0.160.1
+    model: gpt-6-sol
+    reasoning_effort: high

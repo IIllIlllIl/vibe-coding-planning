@@ -73,6 +73,9 @@ before choosing an entry point.
 - [Task-only ACE/GEPA](docs/safe-pce-ace-gepa.md) owns learning from complete
   Safe PCE trajectories. [RPG data](docs/swe-rpg-learning-data.md)
   owns the repository-disjoint training, validation and downstream holdouts.
+- [Autoresearch guide optimization](docs/codex-pce-research.md) is the active
+  Agent-owned research adaptation over the same fixed Safe PCE runner. Its
+  superseded smoke-only script-Codex prototype is archived.
 - [Paired blocking-signal learning](docs/paired-blocking-signal-learning.md)
   and [SWE-chat hybrid learning](docs/swe-chat-hybrid-ace-gepa.md) retain their
   distinct supervision and comparison contracts.

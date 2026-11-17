@@ -13,6 +13,6 @@ full original context so prior methodology and failure analysis remain auditable
 | `mixed-design/` | Superseded PCT-era/mixed core documents |
 | `pct/` | PCT development and long-run plans |
 | `pcc/` | Checker/rule aggregation reports |
-| `integration/` | Superseded integration plans, risks, and Native smoke protocols; current parallel authentication is documented in `../knowledge/codex-parallel-auth-20261024.md` |
+| `integration/` | Superseded integration plans, risks, Native smoke protocols and the smoke-only script-Codex research method; current parallel authentication is documented in `../knowledge/codex-parallel-auth-20261024.md` |
 | `migrations/` | Completed dependency adaptation plans |
 | `deployment/` | Superseded Linux migration notes |

@@ -58,6 +58,9 @@ def check(root: Path, *, worktree: bool = False, environ=None) -> dict:
     """Default: review exactly the index. Optional: also inspect pending edits."""
     root = Path(os.fsdecode(_git(root, "rev-parse", "--show-toplevel")).strip())
     index_names = _names(_git(root, "ls-files", "-z"))
+    gitlinks = {os.fsdecode(entry.split(b"\t", 1)[1])
+                for entry in _git(root, "ls-files", "--stage", "-z").split(b"\0")
+                if entry.startswith(b"160000 ")}
     staged = _names(_git(root, "diff", "--cached", "--name-only", "--diff-filter=ACMRTUXB", "-z"))
     pending = set()
     if worktree:
@@ -72,6 +75,8 @@ def check(root: Path, *, worktree: bool = False, environ=None) -> dict:
         if reason:
             findings.append({"file": name, "source": source, "detectors": [reason]})
             continue  # Do not load private result or credential-state contents.
+        if name in gitlinks:
+            continue  # A Git link records a commit ID, not a file blob.
         if source == "index":
             content = _git(root, "show", ":" + name)
         else:
@@ -89,7 +94,8 @@ def check(root: Path, *, worktree: bool = False, environ=None) -> dict:
     return {"schema_version": 1, "mode": "index_and_worktree" if worktree else "index",
             "staged_files": len(staged), "pending_files": len(pending),
             "findings": findings,
-            "coverage": "Directory markers, established private paths, credential shapes and exact "
+            "coverage": "Git links are pinned commit references, not recursively scanned source. "
+                        "Directory markers, established private paths, credential shapes and exact "
                         "values already in the process environment. Human staged-diff review remains required."}
 
 

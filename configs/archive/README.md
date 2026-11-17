@@ -4,6 +4,9 @@ Archived configs are preserved for provenance and one-off reproduction. They
 are not current defaults. Before executing one, review its dataset, run
 directory, model budget, historical failure context, and referenced files.
 
+- `codex_pce_research/`: superseded script-owned Codex prototype, which had
+  smoke only; preserved source/evidence references distinguish it from the
+  maintained autoresearch adaptation.
 - `supervisor_launches/`: completed, superseded and paused operational launch
   identities. Their contents are frozen reproduction records, not templates.
 - `online_tests/`: dated Online GEPA smoke, resource, and resume runs.

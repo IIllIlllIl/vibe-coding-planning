@@ -1,3 +1,6 @@
 [submodule "third_party/gepa"]
 	path = third_party/gepa
 	url = https://github.com/gepa-ai/gepa.git
+[submodule "third_party/autoresearch"]
+	path = third_party/autoresearch
+	url = https://github.com/karpathy/autoresearch.git
