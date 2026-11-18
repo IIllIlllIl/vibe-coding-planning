@@ -99,6 +99,28 @@ that finished after Native returned; it cannot consume another evaluation.
 Retries retain the existing PCE policy. PCE's existing phase and
 Slurm deadlines govern execution rather than AR's GPU-specific ten-minute kill.
 
+Safe PCE supplies floating-point binary scores, so aggregate resolved counts
+can be stored as `29.0` rather than `29`. The Supervisor accepts either numeric
+representation of a whole count within the split's total; it rejects fractional,
+non-finite, boolean and out-of-range values without rewriting the checkpoint.
+Recovery tests pass real PCE-generated checkpoints through the status reader,
+including a pending evaluation whose completed split is reused on resume.
+The same fixture exercises Supervisor decisions: wait for active nested workers,
+submit one recovery owner after they stop, and stop at the durable evaluation
+budget. Zero/full counts and stale Owner exit markers are covered separately.
+A final score checkpoint remains authoritative if a later evidence-view write
+fails; recovery republishes the view without evaluating the guide again.
+
+Known command-channel limitation: polling tolerates missing files and partial
+JSON, but another Host-side request-read `OSError` can terminate the background
+command thread without setting `service.error`. A local injected `ESTALE`
+reproduces this, with no PCE call or response; the researcher can keep waiting
+until the Owner allocation ends. This is separate from score-checkpoint
+validation and has not been established as a cause of the formal run's stall.
+Before changing this path, retain its existing atomic request/response protocol,
+reuse bounded I/O retry, and surface exhausted transport errors without
+repeating a completed experiment or altering scientific payloads.
+
 Resume uses a pending frozen guide and completed PCE outputs without consuming
 a new experiment or replacing the working guide. Required saves reuse atomic
 I/O retry. After owner-process interruption, the shared Native transport resumes

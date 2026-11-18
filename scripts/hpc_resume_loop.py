@@ -620,11 +620,13 @@ def ar_status():
         rounds = saved["rounds"]
         if not isinstance(rounds, list) or [row["round"] for row in rounds] != list(range(len(rounds))):
             raise ValueError("invalid autoresearch evaluation checkpoint")
-        # Each appended row represents a complete frozen train/validation run.
+        # Safe PCE returns 0.0/1.0, so complete counts may be integer-valued
+        # floats. Validate their value without rewriting scientific records.
         if any(not row.get("guide_sha256")
                or type(row[split].get("total")) is not int or row[split]["total"] < 1
-               or type(row[split].get("resolved")) is not int
+               or type(row[split].get("resolved")) not in (int, float)
                or not 0 <= row[split]["resolved"] <= row[split]["total"]
+               or row[split]["resolved"] != int(row[split]["resolved"])
                for row in rounds for split in ("train", "validation")):
             raise ValueError("incomplete autoresearch score row")
         payload.update(completed_evaluations=len(rounds), pending=saved.get("pending"))

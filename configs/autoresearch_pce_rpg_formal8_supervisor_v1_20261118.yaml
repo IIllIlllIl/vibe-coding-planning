@@ -9,7 +9,7 @@ arguments:
 - --slice-time
 - 00:30:00
 - --state-file
-- .local/hpc-supervisor/autoresearch-pce-rpg-formal8-v1-20261118.json
+- .local/hpc-supervisor/autoresearch-pce-rpg-formal8-v1-20261118-recovery-v2.json
 - --require-clean-worktree
 - --autoresearch-config
 - configs/autoresearch_pce_rpg_formal8_v1_20261118.yaml

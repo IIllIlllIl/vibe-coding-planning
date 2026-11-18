@@ -180,6 +180,31 @@ def test_required_checkpoint_failure_does_not_advance_memory_or_rerun_pce(tmp_pa
     assert len(experiments.state["rounds"]) == 1 and len(calls) == 2
 
 
+def test_failure_after_final_checkpoint_does_not_repeat_completed_evaluation(tmp_path, monkeypatch):
+    config = replace(config_for(tmp_path), max_experiments=1)
+    calls = _executor(monkeypatch)
+    experiments = ar.PCEExperiments(config, SafePCEBackend)
+    from src.optimization import codex_pce_research as shared
+    publish = shared.publish_research
+    def fail_completed_view(evidence, state, **metadata):
+        if state["rounds"]:
+            raise OSError("synthetic failure after durable completion")
+        return publish(evidence, state, **metadata)
+    monkeypatch.setattr(shared, "publish_research", fail_completed_view)
+    with pytest.raises(OSError, match="after durable completion"):
+        experiments.evaluate("evaluate")
+    checkpoint = experiments.private / "state.json"
+    completed = checkpoint.read_bytes()
+    assert len(json.loads(completed)["rounds"]) == 1 and len(calls) == 2
+    assert "pending" not in experiments.state
+    monkeypatch.setattr(shared, "publish_research", publish)
+    resumed = ar.PCEExperiments(config, SafePCEBackend)
+    assert resumed.evaluate("resume")["status"] == "budget_exhausted"
+    assert resumed.evaluate("evaluate")["status"] == "budget_exhausted"
+    assert checkpoint.read_bytes() == completed and len(calls) == 2
+    assert json.loads((resumed.evidence / "manifest.json").read_text())["rounds"] == resumed.state["rounds"]
+
+
 def test_ar_sources_and_mapping_are_explicit_without_training_dependency():
     lock = json.loads((ROOT / "third_party/autoresearch.version.json").read_text())
     upstream = ROOT / "third_party/autoresearch/program.md"

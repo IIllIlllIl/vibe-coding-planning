@@ -257,41 +257,180 @@ def test_first_missing_run_skips_only_unneeded_staging_reclamation() -> None:
     assert not should_skip({"state": "resumable"}, {"submissions": 0})
 
 
-@pytest.mark.parametrize("completed", [0, 1, 9])
-def test_ar_status_counts_complete_evaluations_and_finds_nested_workers(tmp_path, monkeypatch, completed):
-    private = tmp_path / "private"
-    private.mkdir()
-    (private / "identity.json").write_text('{"sha256":"frozen"}')
-    (private / "state.json").write_text(json.dumps({"rounds": [
-        {"round": index, "guide_sha256": "fixed", "train": {"resolved": 2, "total": 46},
-         "validation": {"resolved": 1, "total": 15}} for index in range(completed)],
-        **({"pending": {"round": completed, "guide_sha256": "frozen-guide"}} if completed < 9 else {})}))
-    (private / "research_exit.json").write_text('{"status":"agent_returned_or_interrupted"}')
-    worker = private / "pce/round-0000/hpc_tasks/pce/fp/execution_windows/window_0000_0005/task_state.json"
-    worker.parent.mkdir(parents=True)
-    worker.write_text('{"phase":"SUBMITTED","active_job_id":"123"}')
-    config_file = tmp_path / "config.yaml"
-    config_file.write_text("max_experiments: 9\n")
-    config = SimpleNamespace(remote_run_snapshot=str(tmp_path), job_name="ar-run", autoresearch=True,
+def _ar_status_config(tmp_path, monkeypatch, run_dir, budget=9):
+    config_file = tmp_path / "ar-status-config.yaml"
+    config_file.write_text(f"max_experiments: {budget}\n")
+    config = SimpleNamespace(remote_run_snapshot=str(run_dir), job_name="ar-run", autoresearch=True,
         runtime_config=config_file, ssh_port="8022", ssh_key="", ssh_target="tester@access-iris.uni.lu")
-    fake_bin = tmp_path / "bin"
-    fake_bin.mkdir()
+    fake_bin = tmp_path / "ar-status-bin"
+    fake_bin.mkdir(exist_ok=True)
     for name in ("squeue", "sacct"):
         command = fake_bin / name
         command.write_text('#!/bin/sh\ncase "$*" in *-j*) printf "RUNNING\\n";; esac\n')
         command.chmod(0o755)
     def execute(command, **kwargs):
         arguments = shlex.split(command[-1].split("; python3.11 -c ", 1)[1])
-        result = subprocess.run([sys.executable, "-c", *arguments], text=True, capture_output=True,
+        return subprocess.run([sys.executable, "-c", *arguments], text=True, capture_output=True,
             env={**os.environ, "PATH": str(fake_bin) + os.pathsep + os.environ["PATH"]})
-        return result
     monkeypatch.setattr(resume_loop, "run_command", execute)
-    status = resume_loop.remote_run_status(config)
+    return config
+
+
+def _ar_checkpoint_status(tmp_path, monkeypatch, run_dir, budget=9):
+    return resume_loop.remote_run_status(_ar_status_config(tmp_path, monkeypatch, run_dir, budget))
+
+
+@pytest.mark.parametrize("completed", [0, 1, 9])
+@pytest.mark.parametrize("counts", [(2, 1), (29.0, 6.0), (0, 0), (0.0, 0.0), (46, 15), (46.0, 15.0)])
+def test_ar_status_counts_complete_evaluations_and_finds_nested_workers(tmp_path, monkeypatch, completed, counts):
+    private = tmp_path / "private"
+    private.mkdir()
+    (private / "identity.json").write_text('{"sha256":"frozen"}')
+    (private / "state.json").write_text(json.dumps({"rounds": [
+        {"round": index, "guide_sha256": "fixed", "train": {"resolved": counts[0], "total": 46},
+         "validation": {"resolved": counts[1], "total": 15}} for index in range(completed)],
+        **({"pending": {"round": completed, "guide_sha256": "frozen-guide"}} if completed < 9 else {})}))
+    (private / "research_exit.json").write_text('{"status":"agent_returned_or_interrupted"}')
+    worker = private / "pce/round-0000/hpc_tasks/pce/fp/execution_windows/window_0000_0005/task_state.json"
+    worker.parent.mkdir(parents=True)
+    worker.write_text('{"phase":"SUBMITTED","active_job_id":"123"}')
+    before = (private / "state.json").read_bytes()
+    status = _ar_checkpoint_status(tmp_path, monkeypatch, tmp_path)
     assert status["completed_evaluations"] == completed
     assert status["evaluation_target"] == 9
     assert resume_loop.is_completed(status) is (completed == 9)
     assert status["active_workers"] == ["123"]
     assert status["runtime_initialized"]
+    assert (private / "state.json").read_bytes() == before
+
+
+@pytest.mark.parametrize("score", [
+    {"resolved": value, "total": 46}
+    for value in (0.5, -1, 47, True, False, "29", None, float("nan"), float("inf"), float("-inf"))
+] + [{"total": 46}, {"resolved": 0, "total": 0}, {"resolved": 1, "total": 46.0},
+     {"resolved": 0, "total": True}, {"resolved": 0}])
+@pytest.mark.parametrize("split", ["train", "validation"])
+def test_ar_status_rejects_invalid_counts_without_rewriting(tmp_path, monkeypatch, score, split):
+    private = tmp_path / "private"
+    private.mkdir()
+    checkpoint = private / "state.json"
+    row = {"round": 0, "guide_sha256": "fixed", "train": {"resolved": 29.0, "total": 46},
+           "validation": {"resolved": 6.0, "total": 15}}
+    row[split] = score
+    checkpoint.write_text(json.dumps({"rounds": [row]}))
+    before = checkpoint.read_bytes()
+    status = _ar_checkpoint_status(tmp_path, monkeypatch, tmp_path)
+    assert status["state"] == "status_check_failed"
+    assert status["error_type"] == "invalid_ar_checkpoint"
+    assert checkpoint.read_bytes() == before
+
+
+@pytest.mark.parametrize("completed", [0, 1, 8, 9])
+@pytest.mark.parametrize("owner_exit", ["running", "failed", "budget_exhausted"])
+def test_ar_completion_uses_durable_evaluations_not_owner_exit(tmp_path, monkeypatch, completed, owner_exit):
+    private = tmp_path / "private"
+    private.mkdir()
+    (private / "state.json").write_text(json.dumps({"rounds": [
+        {"round": index, "guide_sha256": "fixed", "train": {"resolved": 0.0, "total": 46},
+         "validation": {"resolved": 15.0, "total": 15}} for index in range(completed)]}))
+    (private / "research_exit.json").write_text(json.dumps({"status": owner_exit, "error_type": "OSError"}))
+    status = _ar_checkpoint_status(tmp_path, monkeypatch, tmp_path)
+    assert status["completed_evaluations"] == completed
+    assert resume_loop.is_completed(status) is (completed == 9)
+    if completed == 9:
+        assert status["status"] == "completed"
+    elif owner_exit == "failed":
+        assert status["state"] == "controller_failed"
+    else:
+        assert status["state"] == "resumable"
+
+
+def test_ar_status_reads_real_pce_scores_and_pending_resume_reuses_results(tmp_path, monkeypatch):
+    from src.optimization.autoresearch_pce import PCEExperiments
+    from src.optimization.safe_pce_learning import SafePCEBackend
+    from tests.test_optimization.test_codex_pce_research import _fixture, _executor
+
+    config = _fixture(tmp_path)
+    calls = _executor(monkeypatch, fail_once=True)
+    experiments = PCEExperiments(config, SafePCEBackend)
+    seed = experiments.evaluate("evaluate")
+    assert type(seed["train"]["resolved"]) is float
+    assert type(seed["validation"]["resolved"]) is float
+    experiments.guide.write_text("Explore the task contracts.")
+    with pytest.raises(OSError, match="synthetic evaluator interruption"):
+        experiments.evaluate("evaluate")
+    checkpoint = config.run_dir / "private/state.json"
+    before = checkpoint.read_bytes()
+    pending = json.loads(before)["pending"]
+    status = _ar_checkpoint_status(tmp_path, monkeypatch, config.run_dir, config.max_experiments)
+    assert status["state"] == "resumable"
+    assert status["completed_evaluations"] == 1
+    assert status["pending"] == pending
+    assert checkpoint.read_bytes() == before
+    assert len(calls) == 4
+
+    resumed = PCEExperiments(config, SafePCEBackend)
+    update = resumed.evaluate("resume")
+    assert len(calls) == 5  # Only the unfinished validation case is executed again.
+    assert resumed.state["rounds"][0] == json.loads(before)["rounds"][0]
+    assert update["guide_sha256"] == pending["guide_sha256"]
+    status = _ar_checkpoint_status(tmp_path, monkeypatch, config.run_dir, config.max_experiments)
+    assert status["state"] == "resumable"
+    assert status["completed_evaluations"] == 2
+
+
+def test_ar_supervisor_reads_real_scores_waits_workers_and_resumes_once(tmp_path, monkeypatch):
+    from dataclasses import replace
+    from src.optimization.autoresearch_pce import PCEExperiments
+    from src.optimization.safe_pce_learning import SafePCEBackend
+    from tests.test_optimization.test_codex_pce_research import _fixture, _executor
+
+    config = replace(_fixture(tmp_path), max_experiments=2)
+    calls = _executor(monkeypatch, fail_once=True)
+    experiments = PCEExperiments(config, SafePCEBackend)
+    experiments.evaluate("evaluate")
+    experiments.guide.write_text("Explore existing behavior.")
+    with pytest.raises(OSError, match="synthetic evaluator interruption"):
+        experiments.evaluate("evaluate")
+    checkpoint = experiments.private / "state.json"
+    before = checkpoint.read_bytes()
+    pending = json.loads(before)["pending"]
+    worker = experiments.private / "pce/round-0001/hpc_tasks/pce/fp/execution_windows/window_0000_0005/task_state.json"
+    worker.parent.mkdir(parents=True)
+    worker.write_text('{"phase":"SUBMITTED","active_job_id":"123"}')
+    supervisor = _ar_status_config(tmp_path, monkeypatch, config.run_dir, budget=2)
+    supervisor.submit, supervisor.once = True, True
+    supervisor.slice_time, supervisor.poll_interval_seconds, supervisor.target_iterations = "00:30:00", 0, 0
+    supervisor.state_file = tmp_path / "supervisor.json"
+    state, submitted = {"submissions": 1}, []
+    monkeypatch.setattr(resume_loop, "_load_supervisor_state", lambda _: state)
+    monkeypatch.setattr(resume_loop, "_submission_identity_error", lambda _: None)
+    monkeypatch.setattr(resume_loop, "reclaim_remote_staging", lambda _: {"removed": 0})
+    monkeypatch.setattr(resume_loop, "reclaim_remote_workspaces", lambda *args, **kwargs: {"removed": 0})
+    def submit(_):
+        submitted.append("resumed-owner")
+        return submitted[-1]
+    monkeypatch.setattr(resume_loop, "submit_slice", submit)
+
+    # The real status reader sees float scores and an active nested window.
+    assert resume_loop.run_loop(supervisor) == 0
+    assert state["status"] == "waiting_workers" and not submitted
+    assert checkpoint.read_bytes() == before and len(calls) == 4
+    worker.write_text('{"phase":"COMPLETE","active_job_id":"123"}')
+    assert resume_loop.run_loop(supervisor) == 0
+    assert state["status"] == "controller_submitted" and submitted == ["resumed-owner"]
+    assert checkpoint.read_bytes() == before and len(calls) == 4
+
+    # External model/Slurm work is injected; PCE caching and checkpoints are real.
+    resumed = PCEExperiments(config, SafePCEBackend)
+    result = resumed.evaluate("resume")
+    assert result["guide_sha256"] == pending["guide_sha256"] and len(calls) == 5
+    assert resume_loop.run_loop(supervisor) == 0
+    assert state["status"] == "completed" and submitted == ["resumed-owner"]
+    assert state["last_remote_status"]["completed_evaluations"] == 2
+    assert json.loads(supervisor.state_file.read_text())["status"] == "completed"
+    assert resumed.evaluate("evaluate")["status"] == "budget_exhausted"
+    assert len(calls) == 5
 
 
 def test_ar_supervisor_uses_configured_evaluation_budget_not_iteration_option(tmp_path):
