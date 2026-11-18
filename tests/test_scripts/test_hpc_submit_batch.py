@@ -67,12 +67,13 @@ def test_ar_dry_run_reuses_staging_and_native_entry_without_gepa_or_provider_set
     ulhpc.write_text("host: example.invalid\nuser: tester\nsync_excludes: [.git]\n")
     result = subprocess.run(["bash", str(SCRIPT), "--autoresearch-config", str(config),
         "--resume-source", "/scratch/frozen-predecessor", "--ulhpc-config", str(ulhpc),
-        "--time", "00:30:00"], text=True, capture_output=True, cwd=REPO_ROOT,
+        "--job-name", "ar-submit-test", "--time", "00:30:00"], text=True, capture_output=True, cwd=REPO_ROOT,
         env={**os.environ, "ULHPC_SUBMIT_BIN": str(fake)})
     assert result.returncode == 0, result.stderr
     assert "--stage-data" in result.stdout and "--persistent-output" in result.stdout
     assert "--module\ntools/Apptainer" in result.stdout
     assert "--time\n00:30:00" in result.stdout
+    assert f"--local-dir\n{REPO_ROOT}/.local/hpc-supervisor/submit-metadata/ar-submit-test\n" in result.stdout
     assert "scripts/run_codex_pce_research.py --config" in result.stdout
     assert "--resume-source /scratch/frozen-predecessor" in result.stdout
     assert "run_gepa_rules.py" not in result.stdout and "pip install" not in result.stdout

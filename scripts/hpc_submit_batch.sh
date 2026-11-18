@@ -591,11 +591,20 @@ EOF
 )
 fi
 
+SUBMISSION_METADATA_DIR="$REPO_ROOT"
+if [[ $AUTORESEARCH -eq 1 ]]; then
+  # Code is synced below; the proven AR environment is already installed.
+  # A metadata-only local dir prevents ulhpc-submit auto-installing the
+  # project's requirements on every short owner allocation.
+  SUBMISSION_METADATA_DIR="$REPO_ROOT/.local/hpc-supervisor/submit-metadata/$JOB_NAME"
+  mkdir -p "$SUBMISSION_METADATA_DIR"
+fi
+
 ULHPC_CMD=(
   "$ULHPC_SUBMIT_BIN"
   --submit-only
   --json
-  --local-dir "$REPO_ROOT"
+  --local-dir "$SUBMISSION_METADATA_DIR"
   --remote-dir "$REMOTE_DIR"
   --no-sync
   --job-name "$JOB_NAME"

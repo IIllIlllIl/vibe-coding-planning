@@ -133,6 +133,10 @@ enumerator below each `private/pce/round-*`; it never traverses case repositorie
 The fixed PCE backend continues to own preparation and task arrays. The local
 Supervisor controls lifecycle only; Codex retains proposal and keep/discard
 decisions and sees the unchanged train/full versus validation/aggregate boundary.
+The shared submitter synchronizes the source tree separately, then uses AR's
+established metadata-only local directory for `ulhpc-submit`; this preserves
+the prepared environment instead of auto-installing project requirements on
+every owner allocation.
 
 An owner-runtime repair must not silently replace frozen identity. Supply
 `--resume-source DIR` only with the preserved predecessor source: it must
