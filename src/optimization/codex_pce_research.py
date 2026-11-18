@@ -72,17 +72,69 @@ def _write_bytes(path, value):
     atomic_write(path, lambda temporary: temporary.write_bytes(value))
 
 
-def run_research(config, *, conversation_factory=None, backend_factory=SafePCEBackend):
+def run_research(config, *, conversation_factory=None, backend_factory=SafePCEBackend, resume_source=None):
     """The AR Agent owns research; the shared runner owns frozen PCE execution."""
     from src.optimization.autoresearch_pce import run_autoresearch
     config.run_dir.mkdir(parents=True, exist_ok=True)
     mark_private_artifact_dir(config.run_dir)
     with _controller_lock(config):
-        return run_autoresearch(config, backend_factory=backend_factory,
-                               conversation_factory=conversation_factory)
+        atomic_json(config.run_dir / "private/research_exit.json", {"status": "running"})
+        try:
+            return run_autoresearch(config, backend_factory=backend_factory,
+                                   conversation_factory=conversation_factory, resume_source=resume_source)
+        except Exception as exc:
+            atomic_json(config.run_dir / "private/research_exit.json", {
+                "status": "failed", "error_type": type(exc).__name__,
+                "errno": getattr(exc, "errno", None),
+                "failure_record": getattr(exc, "failure_record", {}), "error": str(exc)})
+            raise
 
 
-def prepare_research(config, backend_factory):
+def research_identity(config, *, source_root=ROOT):
+    """Scientific identity plus the exact implementation used by an owner."""
+    identity = {"config": asdict(config), "pce": pce_identity(config.pce_config),
+        "seed_sha256": sha256(config.seed), "snapshot": {
+            name: sha256(config.snapshot / name) for name in ("manifest.json", "train.jsonl", "validation.jsonl")},
+        "research_source_sha256": sha256(source_root / "src/optimization/codex_pce_research.py")}
+    identity["autoresearch"] = {"program_sha256": sha256(config.program),
+        "adapter_sha256": sha256(source_root / "src/optimization/autoresearch_pce.py"),
+        "client_sha256": sha256(source_root / "src/optimization/autoresearch_pce_client.py"),
+        "upstream_lock_sha256": sha256(source_root / "third_party/autoresearch.version.json")}
+    session_runtime = source_root / "src/optimization/codex_session_runtime.py"
+    if session_runtime.is_file():
+        identity["autoresearch"]["session_runtime_sha256"] = sha256(session_runtime)
+    return json.loads(json.dumps(identity, sort_keys=True, default=str))
+
+
+def checked_research_identity(config, *, resume_source=None):
+    """An explicit predecessor must reproduce the old digest before upgrading.
+
+    Only the owner source hashes may change. Inputs, program/client, goal,
+    budget, PCE prompts/models/scoring and all frozen selections stay bound.
+    This is a runtime migration, never an unverified identity bypass.
+    """
+    current = research_identity(config)
+    digest = hashlib.sha256(json.dumps(current, sort_keys=True).encode()).hexdigest()
+    path = config.run_dir / "private/identity.json"
+    previous = json.loads(path.read_text()) if path.is_file() else None
+    record = {"sha256": digest, "identity": current}
+    if previous and previous["sha256"] != digest:
+        if resume_source is None:
+            raise ValueError("research inputs or configuration changed; use a new run directory or a verified --resume-source")
+        predecessor = research_identity(config, source_root=Path(resume_source))
+        old_digest = hashlib.sha256(json.dumps(predecessor, sort_keys=True).encode()).hexdigest()
+        if old_digest != previous["sha256"]:
+            raise ValueError("resume source does not reproduce the checkpoint identity")
+        if any(predecessor["autoresearch"][key] != current["autoresearch"][key]
+               for key in ("client_sha256", "upstream_lock_sha256")):
+            raise ValueError("resume source changes the fixed research protocol")
+        record["predecessors"] = [*previous.get("predecessors", []), previous["sha256"]]
+    elif previous:
+        record.update({key: previous[key] for key in ("predecessors",) if key in previous})
+    return record
+
+
+def prepare_research(config, backend_factory, *, resume_source=None):
     """Frozen inputs, evidence and recovery identity reused by AR experiments."""
     private, evidence = config.run_dir / "private", config.run_dir / "analysis_inputs"
     private.mkdir(parents=True, exist_ok=True)
@@ -97,20 +149,10 @@ def prepare_research(config, backend_factory):
             or any(case.split != "validation" for case in validation)
             or len({case.instance_id for case in train + validation}) != len(train) + len(validation)):
         raise ValueError("research requires disjoint nonempty train and validation task sets")
-    identity = {"config": asdict(config), "pce": pce_identity(config.pce_config),
-        "seed_sha256": sha256(config.seed), "snapshot": {
-            name: sha256(config.snapshot / name) for name in ("manifest.json", "train.jsonl", "validation.jsonl")},
-        "research_source_sha256": sha256(Path(__file__))}
-    identity["autoresearch"] = {"program_sha256": sha256(config.program),
-        "adapter_sha256": sha256(Path(__file__).with_name("autoresearch_pce.py")),
-        "client_sha256": sha256(Path(__file__).with_name("autoresearch_pce_client.py")),
-        "upstream_lock_sha256": sha256(ROOT / "third_party/autoresearch.version.json")}
-    digest = hashlib.sha256(json.dumps(identity, sort_keys=True, default=str).encode()).hexdigest()
     manifest_path = private / "identity.json"
-    if manifest_path.exists() and json.loads(manifest_path.read_text())["sha256"] != digest:
-        raise ValueError("research inputs or configuration changed; use a new run directory")
-    if not manifest_path.exists():
-        atomic_json(manifest_path, {"sha256": digest})
+    identity = checked_research_identity(config, resume_source=resume_source)
+    if not manifest_path.exists() or json.loads(manifest_path.read_text()) != identity:
+        atomic_json(manifest_path, identity)
     checkpoint = private / "state.json"
     state = json.loads(checkpoint.read_text()) if checkpoint.exists() else {"rounds": []}
     for row in state["rounds"]:
@@ -184,7 +226,7 @@ def _score_outputs(backend, cases, guide):
         except ControllerYield:
             if backend.config.execution.backend != "hpc_slurm":
                 raise
-            # Keep this bounded pilot's Native conversation alive while the
+            # Keep this owner's Native conversation alive while the
             # existing executor owns submission, preparation, retries and
             # exhausted-Agent finalization. A yield is waiting, not a retry.
             time.sleep(backend.pce.hpc.poll_interval_seconds)

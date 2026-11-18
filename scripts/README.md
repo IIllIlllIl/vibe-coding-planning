@@ -12,6 +12,10 @@ no script or configuration here authorizes execution by itself.
   proposal loop is archived, not another mode; see the
   [method](../docs/codex-pce-research.md) and
   [bindings](../configs/README.md#maintained-entry-points).
+  `--check-resume` checks a retained interruption without inference; an explicit
+  `--resume-source DIR` verifies a predecessor before an owner-runtime upgrade.
+  Long runs use the existing `hpc_supervisor_service.py` and batch submitter's
+  `--autoresearch-config`, with completion counted from full guide evaluations.
 
 - `tools/check_commit_safety.py` is the required pre-commit index review; it
   rejects marked/private artifacts and likely credentials, including forced

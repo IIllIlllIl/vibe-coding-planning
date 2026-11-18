@@ -178,6 +178,19 @@ off the research mounts. Verify the bridge through the existing startup tool's
 do not solve a missing connection by exposing the Host project or running
 evaluation in the Agent workspace. See [the method mapping](codex-pce-research.md#autoresearch-migration).
 
+Long AR evaluations reuse the local Supervisor and shared batch submitter.
+Completion is the configured count of atomic full guide evaluations; a normal
+Native process exit is not scientific completion. Persist only the task's Native
+session rollouts in a private runtime directory, bind them separately from the
+temporary authentication home, and resume its explicit main ID. Owner slices
+reuse frozen pending guides and PCE checkpoints; active workers prevent a second
+owner submission. Runtime-source upgrades require a verified predecessor identity,
+with scientific settings unchanged, rather than an unconditional resume bypass.
+PCE's execution identity includes the shared Native source. Owner-only session
+recovery uses `codex_session_runtime.py` around the existing transport so that
+PCE's bound source and cached physical results remain compatible; a modified
+PCE source cannot be treated as equivalent by changing only owner identity.
+
 Identify the closest completed formal run before adapting a workflow. Compare
 its actual Agent phase graph, configuration, worker dispatch and regression
 tests; reusing low-level submission functions alone does not establish reuse

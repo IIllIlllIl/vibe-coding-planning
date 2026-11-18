@@ -47,8 +47,9 @@ def test_agent_owns_experiments_and_discard_without_host_proposal_loop(tmp_path,
     chosen = config.seed.read_bytes()
 
     class Agent:
-        def __init__(self, *, model_config, container, attempt_dir):
+        def __init__(self, *, model_config, container, attempt_dir, session_dir=None, session_archive=None):
             self.container = container
+            self.session_id = None
             self.temporary = tempfile.TemporaryDirectory(prefix="ar-transport-")
             self.transport = (None, None, None, Path(self.temporary.name))
 
@@ -337,9 +338,10 @@ def test_owner_resume_preserves_prior_native_evidence_and_finished_evaluations(t
     calls = _executor(monkeypatch)
     directories = []
     class Agent:
-        def __init__(self, *, model_config, container, attempt_dir):
+        def __init__(self, *, model_config, container, attempt_dir, session_dir=None, session_archive=None):
             directories.append(attempt_dir)
             self.container = container
+            self.session_id = None
             self.temporary = tempfile.TemporaryDirectory(prefix="ar-resume-test-")
             self.transport = (None, None, None, Path(self.temporary.name))
         def __enter__(self):
@@ -367,3 +369,108 @@ def test_owner_resume_preserves_prior_native_evidence_and_finished_evaluations(t
     assert directories[0] != directories[1] and len(calls) == 6
     assert (directories[0] / "analysis-sessions.json").read_bytes() == previous
     assert json.loads((directories[1] / "analysis-sessions.json").read_text()) == [{"text": "owner 2"}]
+
+
+def test_early_final_continues_same_conversation_until_full_evaluation_budget(tmp_path, monkeypatch):
+    config = config_for(tmp_path)
+    calls = _executor(monkeypatch)
+    owners, turns = [], []
+    class Agent:
+        def __init__(self, *, model_config, container, attempt_dir, session_dir, session_archive):
+            owners.append(self)
+            self.container = container
+            self.session_id = None
+            self.temp = tempfile.TemporaryDirectory()
+            self.transport = (None, None, None, Path(self.temp.name))
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            self.temp.cleanup()
+        def session_evidence(self):
+            return []
+        def call_text(self, **kwargs):
+            turns.append(kwargs)
+            channel = self.transport[3] / "pce-command"
+            if len(turns) == 1:
+                self.session_id = "same-conversation"
+                assert command(channel)["experiment"] == 0
+                return "I finished the baseline and am returning early.", []
+            assert "Continue this same research conversation" in kwargs["user"]
+            assert command(channel)["experiment"] == 1
+            assert command(channel)["experiment"] == 2
+            return "Finished the authorized evaluations.", []
+    assert len(run_research(config, conversation_factory=Agent)) == 3
+    assert len(owners) == 1 and len(turns) == 2 and len(calls) == 6
+    attempt = config.run_dir / "private/analysis/attempt_0001"
+    assert json.loads((attempt / "turn_0001/analysis-turn.json").read_text())["final"].startswith("I finished")
+    assert json.loads((attempt / "turn_0002/analysis-turn.json").read_text())["final"].startswith("Finished")
+
+
+def test_runtime_upgrade_requires_exact_predecessor_identity_and_fixed_inputs(tmp_path):
+    from src.optimization.codex_pce_research import checked_research_identity, research_identity
+    config = config_for(tmp_path)
+    previous = tmp_path / "previous-source"
+    for relative in ("src/optimization/codex_pce_research.py", "src/optimization/autoresearch_pce.py",
+                     "src/optimization/autoresearch_pce_client.py", "third_party/autoresearch.version.json"):
+        path = previous / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes((ROOT / relative).read_bytes())
+    (previous / "src/optimization/autoresearch_pce.py").write_text("previous owner implementation")
+    identity = research_identity(config, source_root=previous)
+    digest = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
+    target = config.run_dir / "private/identity.json"
+    target.parent.mkdir(parents=True)
+    target.write_text(json.dumps({"sha256": digest}))
+    original = target.read_bytes()
+    with pytest.raises(ValueError, match="inputs or configuration changed"):
+        checked_research_identity(config)
+    record = checked_research_identity(config, resume_source=previous)
+    assert record["predecessors"] == [digest] and record["sha256"] != digest
+    assert target.read_bytes() == original  # compatibility checking is read-only.
+    config.seed.write_text("changed scientific input")
+    with pytest.raises(ValueError, match="does not reproduce"):
+        checked_research_identity(config, resume_source=previous)
+
+
+def test_early_final_with_running_pce_waits_then_finishes_without_duplicate(tmp_path, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event, Timer
+    config = replace(config_for(tmp_path), max_experiments=1)
+    calls = _executor(monkeypatch)
+    from src.optimization import safe_pce_learning
+    execute = safe_pce_learning.execute_pce
+    started, release = Event(), Event()
+    def blocked(*args, **kwargs):
+        started.set()
+        assert release.wait(5)
+        return execute(*args, **kwargs)
+    monkeypatch.setattr(safe_pce_learning, "execute_pce", blocked)
+    turns = []
+    class Agent:
+        def __init__(self, *, container, **kwargs):
+            self.container = container
+            self.session_id = "same-native-session"
+            self.temp = tempfile.TemporaryDirectory()
+            self.pool = ThreadPoolExecutor()
+            self.transport = (None, None, None, Path(self.temp.name))
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            self.pool.shutdown()
+            self.temp.cleanup()
+        def session_evidence(self):
+            return []
+        def call_text(self, **kwargs):
+            turns.append(kwargs)
+            if len(turns) == 1:
+                self.future = self.pool.submit(command, self.transport[3] / "pce-command")
+                assert started.wait(5)
+                timer = Timer(0.2, release.set)
+                timer.start()
+                return "PCE is pending; returning early.", []
+            assert release.is_set()
+            assert self.future.result(timeout=5)["experiment"] == 0
+            assert "count is complete" in kwargs["user"]
+            return "Recorded the completed result.", []
+    assert len(run_research(config, conversation_factory=Agent)) == 1
+    assert len(turns) == 2 and len(calls) == 2

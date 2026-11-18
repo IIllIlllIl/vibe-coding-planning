@@ -92,6 +92,15 @@ on this postprocessing path; normal resume identity checks are unchanged.
 The prompt bundle may move with a separate reporting staging root only when
 its frozen content hash matches; a changed prompt digest remains incompatible.
 
+AR uses the same local Supervisor and `hpc_submit_batch.sh
+--autoresearch-config PATH`, with completion taken from `max_experiments`
+(including seed). Do not set a GEPA iteration target for AR. Short owner slices
+resume the explicit Native session and the pending frozen PCE evaluation;
+active nested PCE arrays are checked through the shared state enumerator before
+resubmission. Preserve the original source identity for a reviewed runtime
+upgrade; `--check-resume` performs its compatibility check without model calls.
+See [the AR lifecycle contract](codex-pce-research.md#evidence-and-stopping-boundaries).
+
 ## SWE-chat Login Preheat
 
 The historical acquisition contract and commands are archived in

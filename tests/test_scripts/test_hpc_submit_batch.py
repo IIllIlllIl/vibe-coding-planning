@@ -50,6 +50,35 @@ def test_hpc_submit_batch_help_succeeds() -> None:
     assert "--gepa-config" in result.stdout
 
 
+def test_ar_dry_run_reuses_staging_and_native_entry_without_gepa_or_provider_setup(tmp_path):
+    root = REPO_ROOT / ".tmp_hpc_smoke/ar_submit"
+    snapshot = root / "snapshot"
+    snapshot.mkdir(parents=True, exist_ok=True)
+    (snapshot / "manifest.json").write_text("{}")
+    seed = root / "guide.md"
+    seed.write_text("generalized planning guide")
+    config = root / "ar.yaml"
+    config.write_text(f"mode: autoresearch_pce\npaths:\n  dataset_snapshot: {snapshot}\n"
+                      f"  run_dir: {root / 'run'}\n  seed_guide: {seed}\n")
+    fake = tmp_path / "ulhpc-submit"
+    fake.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')
+    fake.chmod(0o755)
+    ulhpc = tmp_path / "ulhpc.yaml"
+    ulhpc.write_text("host: example.invalid\nuser: tester\nsync_excludes: [.git]\n")
+    result = subprocess.run(["bash", str(SCRIPT), "--autoresearch-config", str(config),
+        "--resume-source", "/scratch/frozen-predecessor", "--ulhpc-config", str(ulhpc),
+        "--time", "00:30:00"], text=True, capture_output=True, cwd=REPO_ROOT,
+        env={**os.environ, "ULHPC_SUBMIT_BIN": str(fake)})
+    assert result.returncode == 0, result.stderr
+    assert "--stage-data" in result.stdout and "--persistent-output" in result.stdout
+    assert "--module\ntools/Apptainer" in result.stdout
+    assert "--time\n00:30:00" in result.stdout
+    assert "scripts/run_codex_pce_research.py --config" in result.stdout
+    assert "--resume-source /scratch/frozen-predecessor" in result.stdout
+    assert "run_gepa_rules.py" not in result.stdout and "pip install" not in result.stdout
+    assert 'source "$REMOTE_ENV_FILE"' not in result.stdout
+
+
 @pytest.mark.parametrize("finalize", [False, True])
 def test_hpc_submit_batch_finds_ulhpc_submit_next_to_conda_exe(tmp_path, finalize) -> None:
     conda_bin = tmp_path / "conda-base" / "bin"

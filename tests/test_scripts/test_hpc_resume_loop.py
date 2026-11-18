@@ -257,6 +257,56 @@ def test_first_missing_run_skips_only_unneeded_staging_reclamation() -> None:
     assert not should_skip({"state": "resumable"}, {"submissions": 0})
 
 
+@pytest.mark.parametrize("completed", [0, 1, 9])
+def test_ar_status_counts_complete_evaluations_and_finds_nested_workers(tmp_path, monkeypatch, completed):
+    private = tmp_path / "private"
+    private.mkdir()
+    (private / "identity.json").write_text('{"sha256":"frozen"}')
+    (private / "state.json").write_text(json.dumps({"rounds": [
+        {"round": index, "guide_sha256": "fixed", "train": {"resolved": 2, "total": 46},
+         "validation": {"resolved": 1, "total": 15}} for index in range(completed)],
+        **({"pending": {"round": completed, "guide_sha256": "frozen-guide"}} if completed < 9 else {})}))
+    (private / "research_exit.json").write_text('{"status":"agent_returned_or_interrupted"}')
+    worker = private / "pce/round-0000/hpc_tasks/pce/fp/execution_windows/window_0000_0005/task_state.json"
+    worker.parent.mkdir(parents=True)
+    worker.write_text('{"phase":"SUBMITTED","active_job_id":"123"}')
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text("max_experiments: 9\n")
+    config = SimpleNamespace(remote_run_snapshot=str(tmp_path), job_name="ar-run", autoresearch=True,
+        runtime_config=config_file, ssh_port="8022", ssh_key="", ssh_target="tester@access-iris.uni.lu")
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    for name in ("squeue", "sacct"):
+        command = fake_bin / name
+        command.write_text('#!/bin/sh\ncase "$*" in *-j*) printf "RUNNING\\n";; esac\n')
+        command.chmod(0o755)
+    def execute(command, **kwargs):
+        arguments = shlex.split(command[-1].split("; python3.11 -c ", 1)[1])
+        result = subprocess.run([sys.executable, "-c", *arguments], text=True, capture_output=True,
+            env={**os.environ, "PATH": str(fake_bin) + os.pathsep + os.environ["PATH"]})
+        return result
+    monkeypatch.setattr(resume_loop, "run_command", execute)
+    status = resume_loop.remote_run_status(config)
+    assert status["completed_evaluations"] == completed
+    assert status["evaluation_target"] == 9
+    assert resume_loop.is_completed(status) is (completed == 9)
+    assert status["active_workers"] == ["123"]
+    assert status["runtime_initialized"]
+
+
+def test_ar_supervisor_uses_configured_evaluation_budget_not_iteration_option(tmp_path):
+    config_file = tmp_path / "ar.yaml"
+    config_file.write_text(f"mode: autoresearch_pce\nmax_experiments: 9\npaths:\n  run_dir: {REPO_ROOT / 'output/AR/test'}\n")
+    ulhpc = tmp_path / "ulhpc.yaml"
+    ulhpc.write_text("host: example.invalid\nuser: tester\n")
+    arguments = ["--autoresearch-config", str(config_file), "--ulhpc-config", str(ulhpc)]
+    config = resume_loop.parse_args(arguments)
+    assert config.autoresearch and not config.offline_gepa and config.target_iterations == 0
+    assert config.remote_run_snapshot.endswith("/run_state/output/AR/test")
+    with pytest.raises(SystemExit, match="max_experiments"):
+        resume_loop.parse_args(["--target-iterations", "8", *arguments])
+
+
 def test_remote_workspace_reclamation_is_opt_in_and_uses_exact_run_root(
     monkeypatch,
 ) -> None:
@@ -447,6 +497,41 @@ def _config_identity(config: Path) -> dict[str, str]:
         "runtime_config_sha256": hashlib.sha256(config.read_bytes()).hexdigest(),
         "repo_commit": commit,
     }
+
+
+def test_ar_supervisor_resumes_after_early_exit_waits_workers_and_stops_at_nine(tmp_path):
+    root = REPO_ROOT / ".tmp_hpc_smoke/ar_supervisor"
+    root.mkdir(parents=True, exist_ok=True)
+    config = root / "ar.yaml"
+    config.write_text(f"mode: autoresearch_pce\nmax_experiments: 9\npaths:\n  run_dir: {root / 'run'}\n")
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    status_file = tmp_path / "status.jsonl"
+    status_file.write_text("\n".join(json.dumps(row) for row in [
+        {"state": "resumable", "completed_evaluations": 0, "active_workers": ["old-worker"]},
+        {"state": "resumable", "completed_evaluations": 0},
+        {"state": "resumable", "completed_evaluations": 1},
+        {"state": "result", "status": "completed", "completed_evaluations": 9}]) + "\n")
+    ssh_log = tmp_path / "ssh.log"
+    _fake_ssh(fake_bin / "ssh", status_file, ssh_log)
+    batch = tmp_path / "batch.sh"
+    batch_log = tmp_path / "batch.log"
+    _fake_batch_script(batch, batch_log)
+    state_file = tmp_path / "state.json"
+    command = [sys.executable, str(SCRIPT), "--autoresearch-config", str(config), "--submit",
+        "--slice-time", "00:30:00", "--poll-interval", "0", "--job-name", "ar-supervisor",
+        "--batch-script", str(batch), "--state-file", str(state_file)]
+    result = subprocess.run(command, text=True, capture_output=True, cwd=REPO_ROOT, env=_env(fake_bin), timeout=30)
+    assert result.returncode == 0, result.stderr
+    state = json.loads(state_file.read_text())
+    assert state["submissions"] == 2 and state["status"] == "completed"
+    assert state["last_remote_status"]["completed_evaluations"] == 9
+    assert "waiting without submission" in result.stdout
+    assert batch_log.read_text().count("00:30:00") == 2
+    before = ssh_log.read_bytes()
+    # Restarting a completed local service must not revive an old/deleted run.
+    again = subprocess.run(command, text=True, capture_output=True, cwd=REPO_ROOT, env=_env(fake_bin), timeout=30)
+    assert again.returncode == 0 and ssh_log.read_bytes() == before
 
 
 def test_hpc_resume_loop_dry_run_delegates_slice_time(tmp_path: Path) -> None:

@@ -13,6 +13,8 @@ lifetimes; see [the lifecycle contract](../docs/documentation-authority.md).
   The [full RPG binding](autoresearch_pce_rpg_formal8_v1_20261118.yaml) permits
   Seed plus eight updates over 46 train / 15 validation tasks (549 PCE before
   retries), with the same frozen PCE source. No config authorizes a launch.
+  Its [recovery Supervisor](autoresearch_pce_rpg_formal8_supervisor_v1_20261118.yaml)
+  uses 30-minute owner slices and the same nine complete guide evaluations.
   The [method contract](../docs/codex-pce-research.md)
   owns this Agent-controlled loop. The superseded smoke-only
   [script-Codex prototype](archive/codex_pce_research/README.md) is archived,

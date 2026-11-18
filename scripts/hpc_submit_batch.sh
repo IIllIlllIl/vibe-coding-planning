@@ -14,6 +14,8 @@ set -euo pipefail
 
 SUBMIT=0
 GEPA_RULES=0
+AUTORESEARCH=0
+RESUME_SOURCE=""
 FINALIZE_ONLY=0
 GEPA_CONFIG=""
 JOB_NAME="vibe-gepa"
@@ -36,11 +38,14 @@ usage() {
   cat <<'USAGE'
 Usage:
   bash scripts/hpc_submit_batch.sh --gepa-rules --gepa-config PATH [options]
+  bash scripts/hpc_submit_batch.sh --autoresearch-config PATH [options]
 
 Required:
   --gepa-rules              Flag to submit a GEPA rules optimization job
   --gepa-config PATH        Path to the GEPA config file
   --finalize-only           Export a completed Safe PCE checkpoint; no Agents/search
+  --autoresearch-config PATH  Run AR through the same staging/submission lifecycle
+  --resume-source DIR       Verified predecessor source on HPC, for an AR runtime upgrade
 
 Slurm / ulhpc-submit options:
   --job-name NAME           Slurm job name (default: vibe-gepa)
@@ -88,6 +93,15 @@ while [[ $# -gt 0 ]]; do
     --gepa-rules)
       GEPA_RULES=1
       shift
+      ;;
+    --autoresearch-config)
+      AUTORESEARCH=1
+      GEPA_CONFIG="$2"
+      shift 2
+      ;;
+    --resume-source)
+      RESUME_SOURCE="$2"
+      shift 2
       ;;
     --finalize-only)
       FINALIZE_ONLY=1
@@ -177,9 +191,17 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ $GEPA_RULES -ne 1 ]]; then
-  echo "ERROR: --gepa-rules is required" >&2
+if [[ $((GEPA_RULES + AUTORESEARCH)) -ne 1 ]]; then
+  echo "ERROR: choose --gepa-rules or --autoresearch-config" >&2
   usage >&2
+  exit 2
+fi
+if [[ $AUTORESEARCH -eq 1 && $FINALIZE_ONLY -eq 1 ]]; then
+  echo "ERROR: --finalize-only is specific to GEPA" >&2
+  exit 2
+fi
+if [[ -n "$RESUME_SOURCE" && ( $AUTORESEARCH -ne 1 || ! "$RESUME_SOURCE" =~ ^[A-Za-z0-9_./-]+$ ) ]]; then
+  echo "ERROR: --resume-source requires AR and a simple remote source directory" >&2
   exit 2
 fi
 if [[ -z "$GEPA_CONFIG" ]]; then
@@ -295,6 +317,12 @@ ulhpc_config = Path(sys.argv[2]) if len(sys.argv) > 2 and sys.argv[2] else None
 repo_root = gepa_config.parents[1] if gepa_config.parent.name == "configs" else Path.cwd()
 cfg = yaml.safe_load(gepa_config.read_text(encoding="utf-8")) or {}
 paths = cfg.get("paths", {})
+if cfg.get("mode") == "autoresearch_pce":
+    import hashlib, json
+    lock = json.loads((repo_root / "third_party/autoresearch.version.json").read_text())
+    upstream = repo_root / "third_party/autoresearch/program.md"
+    if not upstream.is_file() or hashlib.sha256(upstream.read_bytes()).hexdigest() != lock["program_sha256"]:
+        raise SystemExit("initialize the pinned autoresearch submodule before submission")
 
 def resolve(raw: str) -> str:
     if not raw:
@@ -311,7 +339,7 @@ print(f"run_dir={resolve(paths.get('run_dir', ''))}")
 print(f"selection={resolve((cfg.get('inputs', {}) or {}).get('selection', ''))}")
 print(
     "initial_guideline="
-    + resolve(paths.get("initial_guideline", paths.get("initial_rules", "")))
+    + resolve(paths.get("initial_guideline", paths.get("initial_rules", paths.get("seed_guide", ""))))
 )
 container = cfg.get("container", {}) or {}
 raw_sif_cache = str(container.get("sif_cache_dir", ""))
@@ -357,6 +385,9 @@ while IFS='=' read -r KEY VALUE; do
     resume_predecessor_config) RESUME_PREDECESSOR_CONFIG="$VALUE" ;;
   esac
 done <<< "$CONFIG_VALUES"
+if [[ $AUTORESEARCH -eq 1 && -z "$REMOTE_APPTAINER_SIF_CACHE_DIR" ]]; then
+  REMOTE_APPTAINER_SIF_CACHE_DIR="${VIBE_HPC_ROOT}/shared/sif-cache"
+fi
 
 if [[ -z "$DATASET_SNAPSHOT" || ! -d "$DATASET_SNAPSHOT" ]]; then
   echo "ERROR: dataset_snapshot directory not found locally: $DATASET_SNAPSHOT" >&2
@@ -475,7 +506,15 @@ PY
   trap 'rm -f "$EFFECTIVE_ULHPC_CONFIG"' EXIT
 fi
 
-if [[ $FINALIZE_ONLY -eq 1 ]]; then
+if [[ $AUTORESEARCH -eq 1 ]]; then
+REMOTE_SCRIPT=$(cat <<EOF
+set -euo pipefail
+export PYTHONPATH="\$PWD/third_party/gepa/src:\$PWD:\${PYTHONPATH:-}"
+export LITELLM_LOCAL_MODEL_COST_MAP=True PYTHONUNBUFFERED=1
+python3 scripts/run_codex_pce_research.py --config "$GEPA_CONFIG_REL" ${RESUME_SOURCE:+--resume-source "$RESUME_SOURCE"}
+EOF
+)
+elif [[ $FINALIZE_ONLY -eq 1 ]]; then
 REMOTE_SCRIPT=$(cat <<EOF
 set -euo pipefail
 PYTHONPATH="\$PWD/third_party/gepa/src:\${PYTHONPATH:-}" \\

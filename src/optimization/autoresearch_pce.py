@@ -9,9 +9,11 @@ import json
 from pathlib import Path
 import subprocess
 from threading import Event, Thread
+from types import SimpleNamespace
 
 from src.optimization.audit import optional_diagnostic
-from src.optimization.codex_cli_runtime import CodexConversation, CodexSIFExecution
+from src.optimization.codex_cli_runtime import CodexSIFExecution
+from src.optimization.codex_session_runtime import PersistentCodexConversation as CodexConversation
 from src.optimization.codex_pce_research import (
     ROOT, _write_bytes, evaluate_research_guide, prepare_research, publish_research,
 )
@@ -24,10 +26,11 @@ class CommandUsageError(ValueError):
 
 
 class PCEExperiments:
-    def __init__(self, config, backend_factory):
+    def __init__(self, config, backend_factory, *, resume_source=None):
         self.config = config
         (self.private, self.evidence, self.binding, self.backend,
-         self.train, self.validation, self.state) = prepare_research(config, backend_factory)
+         self.train, self.validation, self.state) = prepare_research(
+             config, backend_factory, resume_source=resume_source)
         self.workspace = config.run_dir / "research_workspace"
         self.workspace.mkdir(exist_ok=True)
         self.guide = self.workspace / "guide.md"
@@ -115,6 +118,8 @@ def evaluation_command(experiments, address):
     for path in (request_path, response_path):
         path.unlink(missing_ok=True)
     stopped = Event()
+    service = SimpleNamespace(idle=Event(), error=None)
+    service.idle.set()
 
     def serve():
         last_request = None
@@ -128,6 +133,8 @@ def evaluation_command(experiments, address):
                 stopped.wait(0.1)
                 continue
             last_request = request["id"]
+            service.idle.clear()
+            service.error = None
             # Progress is operator information, not a score or another request.
             with optional_diagnostic("AR command acknowledgment"):
                 atomic_json(response_path, {"id": last_request, "progress": {
@@ -137,6 +144,7 @@ def evaluation_command(experiments, address):
             try:
                 result = experiments.evaluate(request["action"])
             except Exception as exc:
+                service.error = exc
                 # Validation failures can contain held-out task/test details.
                 with optional_diagnostic("AR evaluator failure"):
                     atomic_json(experiments.private / "evaluation_error.json",
@@ -154,22 +162,23 @@ def evaluation_command(experiments, address):
                     break
                 except OSError:
                     stopped.wait(0.1)
+            service.idle.set()
 
     thread = Thread(target=serve, name="autoresearch-pce-command", daemon=True)
     thread.start()
     try:
-        yield
+        yield service
     finally:
         stopped.set()
         thread.join(timeout=1)
 
 
-def run_autoresearch(config, *, backend_factory, conversation_factory=None):
+def run_autoresearch(config, *, backend_factory, conversation_factory=None, resume_source=None):
     lock = json.loads((ROOT / "third_party/autoresearch.version.json").read_text())
     upstream = ROOT / "third_party/autoresearch/program.md"
     if not upstream.is_file() or sha256(upstream) != lock["program_sha256"]:
         raise ValueError("initialize the pinned third_party/autoresearch submodule")
-    experiments = PCEExperiments(config, backend_factory)
+    experiments = PCEExperiments(config, backend_factory, resume_source=resume_source)
     _write_bytes(experiments.evidence / "program.md", config.program.read_bytes())
     _write_bytes(experiments.evidence / "pce.py", Path(__file__).with_name("autoresearch_pce_client.py").read_bytes())
     atomic_json(experiments.private / "autoresearch_provenance.json", lock)
@@ -181,27 +190,52 @@ def run_autoresearch(config, *, backend_factory, conversation_factory=None):
         repository_dir=experiments.workspace, repository_writable=True,
         interpreter="/usr/local/bin/python3", tool_network_disabled=True,
         output_files=("research_final.md",))
-    # A resumed owner starts a fresh Native conversation; retain its predecessor.
+    # Owners retain separate evidence but share only this experiment's Native
+    # rollouts. Import an older owner's original archive once when upgrading.
     analysis = experiments.private / "analysis"
     analysis.mkdir(exist_ok=True)
     number = 1
     while (attempt := analysis / f"attempt_{number:04d}").exists():
         number += 1
+    archives = sorted(analysis.glob("attempt_*/analysis-sessions.json"))
     attempt.mkdir()
     factory = conversation_factory or CodexConversation
     with factory(model_config=config.model, container=boundary,
-                 attempt_dir=attempt) as agent:
+                 attempt_dir=attempt,
+                 session_dir=experiments.private / "native-session",
+                 session_archive=archives[-1] if archives else None) as agent:
         # Reuse the existing writable output mount for command envelopes.
         # No host project, validation directory or provider source is mounted.
-        with evaluation_command(experiments, agent.transport[3] / "pce-command"):
+        with evaluation_command(experiments, agent.transport[3] / "pce-command") as service:
             try:
-                final, trajectory = agent.call_text(
-                    system="Read /evidence/program.md and carry out its autoresearch experiment.",
-                    task="Conduct the authorized guide research using the fixed PCE command.",
-                    user="Setup is prepared in /testbed. The objective, approved experiment budget and complete history inventory are in /evidence/GOAL.md and /evidence/manifest.json.",
-                    output_filename="research_final.md")
-                with optional_diagnostic("AR research session"):
-                    atomic_json(attempt / "analysis-turn.json", {"final": final, "trajectory": trajectory})
+                turn = 0
+                finish_pending = False
+                while len(experiments.state["rounds"]) < experiments.budget or finish_pending:
+                    turn += 1
+                    agent.attempt_dir = attempt / f"turn_{turn:04d}"
+                    user = ("Setup is prepared in /testbed. The objective, approved experiment budget "
+                            "and complete history inventory are in /evidence/GOAL.md and /evidence/manifest.json.")
+                    if agent.session_id:
+                        user += (" Continue this same research conversation. Read the current manifest; "
+                                 "complete its pending frozen evaluation with python3 /evidence/pce.py resume "
+                                 "when present, then continue until the approved evaluation count is reached. "
+                                 "Tool process handles from an earlier allocation may no longer exist.")
+                    if finish_pending:
+                        user += " The approved evaluation count is complete. Record the final completed result and finish."
+                    final, trajectory = agent.call_text(
+                        system="Read /evidence/program.md and carry out its autoresearch experiment.",
+                        task="Conduct the authorized guide research using the fixed PCE command.",
+                        user=user, output_filename="research_final.md")
+                    with optional_diagnostic("AR research session"):
+                        atomic_json(agent.attempt_dir / "analysis-turn.json", {"final": final, "trajectory": trajectory})
+                    # If Native returned with a live PCE request, let that same
+                    # request finish before a continuation, not another call.
+                    returned_before_completion = len(experiments.state["rounds"]) < experiments.budget
+                    service.idle.wait()
+                    if service.error is not None:
+                        raise service.error
+                    finish_pending = (returned_before_completion and
+                                      len(experiments.state["rounds"]) == experiments.budget)
             finally:
                 with optional_diagnostic("AR Native session archive"):
                     atomic_json(attempt / "analysis-sessions.json", agent.session_evidence())

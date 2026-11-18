@@ -25,7 +25,7 @@ Upstream GPU training, PyTorch, tokenizers and datasets are not installed.
 | Commit, run, TSV, keep/discard, simplicity preference | Private guide commits and `results.tsv` | Codex decides and records |
 | Continue until stopped | Approved `max_experiments`, including seed | Host enforces evaluation budget |
 
-A single Native Codex call reads the goal and full inventory, evaluates the
+A persistent Native Codex conversation reads the goal and full inventory, evaluates the
 unchanged seed, then repeats: inspect training evidence, form an idea, edit and
 commit the guide, invoke PCE, compare aggregate scores, record the result, and
 keep or discard the change. The Host neither requests a proposal each round
@@ -48,6 +48,9 @@ retries/checkpoints, source isolation, atomic saves and lossless training-record
 indexes. `CodexConversation` and `CodexSIFExecution` retain Native transport,
 pinned CLI, private authentication and mount handling. The script prototype's
 single-guide evaluator remains shared machinery, without its proposal loop.
+`codex_session_runtime.py` adds opt-in persistence by wrapping those components.
+The PCE fingerprint binds `codex_cli_runtime.py`, so owner-only recovery must
+leave that base source unchanged to reuse earlier physical PCE results.
 
 The new adapter supplies the private writable guide workspace and a small
 standard-library file-command bridge in the existing `/agent-output` mount:
@@ -87,15 +90,26 @@ checkpoints own results. A guide that performs badly remains available for
 analysis. Operationally incomplete evaluations do not become invented zeroes;
 public command failures hide held-out details, with full errors kept privately.
 
-`max_experiments` includes the seed, while retries retain the existing PCE
-policy. The Agent may stop earlier; the exit record distinguishes an early
-return from spending the complete evaluation budget. PCE's existing phase and
+`max_experiments` includes the seed. One evaluation means a complete frozen
+train/validation run, not one case, a Git commit or a Native turn. The existing
+local Supervisor stops at that durable count. An early Native final response
+does not complete the experiment: the owner waits for its live PCE request,
+then continues the same conversation. A final continuation can record a result
+that finished after Native returned; it cannot consume another evaluation.
+Retries retain the existing PCE policy. PCE's existing phase and
 Slurm deadlines govern execution rather than AR's GPU-specific ten-minute kill.
 
 Resume uses a pending frozen guide and completed PCE outputs without consuming
 a new experiment or replacing the working guide. Required saves reuse atomic
-I/O retry. After owner-process interruption a fresh Codex conversation reads
-retained Git/TSV/evidence; Native thread restoration is not implemented.
+I/O retry. After owner-process interruption, the shared Native transport resumes
+the explicit original session ID from `private/native-session/sessions`.
+Rollouts persist directly through a nested SIF mount, including before a turn
+returns. Authentication still comes from a fresh temporary snapshot; neither
+auth, user configuration nor CLI databases enter the durable session directory.
+Subthreads cannot replace the main session, and ambiguous identities fail
+instead of selecting a different conversation. Old session archives can be
+imported byte-for-byte when no live rollout exists. Transient tool handles
+do not survive allocations; `pce.py resume` continues the durable PCE state.
 Each owner has a separate `private/analysis/attempt_NNNN` evidence directory,
 so recovery preserves the previous Native conversation rather than replacing it.
 Diagnostic archive failures do not invalidate completed scientific records.
@@ -111,8 +125,22 @@ not a learning or generalization estimate. Configuration is not launch consent.
 
 Deploy a committed source export with both pinned submodules (`gepa` and
 `autoresearch`); a parent-only Git archive leaves empty gitlink directories.
-Use the established `ulhpc-submit` staging and Slurm modules, not a new research
-Supervisor. The fixed PCE backend continues to own preparation and task arrays.
+Use `hpc_supervisor_service.py` / `hpc_resume_loop.py` and the existing
+`hpc_submit_batch.sh --autoresearch-config PATH` adapter. They reuse
+`ulhpc-submit` staging, modules, locks, active-job checks, retry and checkpoint
+handling. AR status reads its durable round count and the shared task-state
+enumerator below each `private/pce/round-*`; it never traverses case repositories.
+The fixed PCE backend continues to own preparation and task arrays. The local
+Supervisor controls lifecycle only; Codex retains proposal and keep/discard
+decisions and sees the unchanged train/full versus validation/aggregate boundary.
+
+An owner-runtime repair must not silently replace frozen identity. Supply
+`--resume-source DIR` only with the preserved predecessor source: it must
+reproduce the old checkpoint digest using the unchanged current scientific
+inputs. The new identity records its predecessor. A changed seed, split,
+budget, goal, program, client or PCE semantics fails verification. Use
+`run_codex_pce_research.py --config PATH --check-resume --resume-source DIR`
+for a read-only compatibility check, without inference or checkpoint updates.
 
 Before inference, use `verify_codex_sif_startup.py --preflight-only
 --workspace-write --pce-command --generic-isolation-image --tool-network-disabled`
@@ -138,6 +166,14 @@ The Agent retained its first update using improved training performance at a
 perfect validation baseline, rather than strict validation-only selection.
 Real discard, retry and cross-owner recovery branches remain outside this
 successful smoke's runtime coverage.
+Separate Native recovery acceptance uses the existing startup verifier's
+`--resume-session-probe start` and `resume` steps in two independent Slurm jobs.
+Iris jobs `6348955` and `6348958` passed with CLI 0.160.1, `gpt-6-sol/high`:
+the exact main session ID survived, and the second process recalled a random
+nonce available only in the previous turn. This checks Linux/SIF session
+recovery, not learning performance. Local regression tests additionally cover
+early return during live PCE, reuse of completed outputs, no duplicate
+submission while workers are active, frozen identity and evaluation-count stop.
 
 ## Full RPG binding
 
@@ -155,13 +191,11 @@ AR evaluates full train and validation for each submitted guide, whereas the
 GEPA comparator samples training minibatches and gates validation. Compare
 evaluation counts and wall time alongside proposal count.
 
-The owner launch uses the established `ulhpc-submit` entry, Iris 1 CPU / 4G,
-with a 48-hour wall-clock limit (the current batch maximum). That is an upper
-limit, not an ETA or an instruction to spend the entire allocation. There is
+The [recovery Supervisor binding](../configs/autoresearch_pce_rpg_formal8_supervisor_v1_20261118.yaml)
+uses Iris 1 CPU / 4G, 30-minute owner slices and the unchanged nine-evaluation
+budget. Already active PCE workers finish independently; the Supervisor waits
+before submitting another owner, whose Native conversation and PCE state both
+resume. Worker deadlines and attempts are unchanged. There is
 no ten-hour stopping condition; partial completed guides can be analyzed while
-the experiment continues. There is
-no automatic owner resubmission: after interruption, verify worker state and
-restart the same committed binding to continue retained PCE/checkpoints. A new
-Native conversation reads durable history, as described above. Worker deadlines
-and attempts are unchanged. Launch arguments and current storage checks belong
+the experiment continues. Launch arguments and current storage checks belong
 in private operational evidence, not in the optimizer's scientific input bundle.

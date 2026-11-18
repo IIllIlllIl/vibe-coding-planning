@@ -24,6 +24,7 @@ from src.optimization.codex_cli_runtime import (  # noqa: E402
     _codex_binary, _sif_isolation_preflight, run_codex_json_agent,
     _codex_command, _permission_options, _permission_profile,
 )
+from src.optimization.codex_session_runtime import PersistentCodexConversation as CodexConversation
 
 
 def write_json(path, value):
@@ -136,7 +137,13 @@ def main():
                         help="Frozen case repository path, e.g. /testbed2")
     parser.add_argument("--outer-isolation-only", action="store_true",
                         help="Test Apptainer isolation directly; never run Codex inference or its sandbox")
+    parser.add_argument("--resume-session-probe", choices=("start", "resume"),
+                        help="One tiny Native call per invocation; verify the same session across two jobs")
     args = parser.parse_args()
+    if args.resume_session_probe:
+        if args.preflight_only or args.outer_isolation_only or args.pce_command:
+            parser.error("the resume probe calls a model; it cannot be combined with no-model modes")
+        return verify_session_resume(args)
     if args.workspace_write and (not args.preflight_only or args.outer_isolation_only):
         parser.error("--workspace-write requires --preflight-only and the inner sandbox")
     if args.pce_command and not args.workspace_write:
@@ -213,6 +220,46 @@ def main():
     finally:
         write_json(args.output_dir / "report.json", report)
         print(json.dumps({"status": report["status"], "output_dir": str(args.output_dir)}), flush=True)
+
+
+def verify_session_resume(args):
+    """Cross-process acceptance, isolated from tasks, guides and validation."""
+    from src.optimization.hpc.task_batch import atomic_json
+    from src.artifact_policy import mark_private_artifact_dir
+    root = args.output_dir
+    if args.resume_session_probe == "start":
+        root.mkdir(parents=True, exist_ok=False)
+        mark_private_artifact_dir(root)
+        (root / "evidence").mkdir()
+        (root / "evidence/manifest.json").write_text("{}\n")
+    receipt = root / "start.json"
+    expected = secrets.token_hex(16) if args.resume_session_probe == "start" else json.loads(receipt.read_text())["nonce"]
+    model = {"executor": "codex_cli", "codex_binary": args.codex_binary,
+        "codex_auth_file": args.codex_auth_file, "codex_version": args.codex_version,
+        "model": args.model, "reasoning_effort": args.reasoning_effort}
+    boundary = CodexSIFExecution(args.evidence_sif, root / "evidence",
+        interpreter="/usr/local/bin/python3" if args.generic_isolation_image else None,
+        tool_network_disabled=args.tool_network_disabled, output_files=("probe-final.txt",))
+    with CodexConversation(model_config=model, container=boundary,
+            attempt_dir=root / args.resume_session_probe, session_dir=root / "native-session") as agent:
+        if args.resume_session_probe == "start":
+            if agent.session_id:
+                raise RuntimeError("probe must start with a new private session")
+            user = "Remember this nonce for the next turn and reply with only it: " + expected
+        else:
+            if agent.session_id != json.loads(receipt.read_text())["session_id"]:
+                raise RuntimeError("probe did not select the original Native session ID")
+            user = "Reply with only the nonce from our previous turn."
+        raw, trajectory = agent.call_text(system="You are verifying Native conversation persistence.",
+            user=user, task="Return the requested nonce.", output_filename="probe-final.txt")
+        atomic_json(root / args.resume_session_probe / "trajectory.json", trajectory)
+        if raw.strip() != expected:
+            raise RuntimeError("resumed Native conversation did not retain the prior nonce")
+        atomic_json(root / (args.resume_session_probe + ".json"), {
+            "status": "passed", "nonce": expected, "session_id": agent.session_id,
+            "job_id": os.environ.get("SLURM_JOB_ID"), "auth_persisted": False})
+        print(json.dumps({"status": "passed", "step": args.resume_session_probe,
+                          "session_id": agent.session_id}), flush=True)
 
 
 if __name__ == "__main__":

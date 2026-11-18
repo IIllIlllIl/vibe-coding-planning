@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Submit resumable GEPA HPC jobs in short Slurm slices."""
+"""Submit resumable experiment owners in short Slurm slices."""
 
 from __future__ import annotations
 
@@ -103,6 +103,7 @@ class SupervisorConfig:
     reclaim_staging: bool
     reclaim_workspaces: bool
     remote_staging_root: str | None
+    autoresearch: bool = False
 
 
 def parse_duration(raw: str) -> int:
@@ -341,14 +342,20 @@ def parse_args(argv: list[str]) -> SupervisorConfig:
         raise SystemExit("--target-iterations must be non-negative")
     gepa_config_raw = _take_option(batch_args, "--gepa-config")
     workflow_config_raw = _take_option(batch_args, "--config")
-    if gepa_config_raw and workflow_config_raw:
-        raise SystemExit("use only one of --gepa-config or --config")
-    runtime_config_raw = gepa_config_raw or workflow_config_raw
+    research_config_raw = _take_option(batch_args, "--autoresearch-config")
+    if sum(bool(raw) for raw in (gepa_config_raw, workflow_config_raw, research_config_raw)) > 1:
+        raise SystemExit("use one runtime config option")
+    runtime_config_raw = gepa_config_raw or workflow_config_raw or research_config_raw
     if not runtime_config_raw:
-        raise SystemExit("--gepa-config or --config is required")
+        raise SystemExit("--gepa-config, --config or --autoresearch-config is required")
     runtime_config = _resolve_repo_path(runtime_config_raw)
     offline_gepa = "--gepa-rules" in batch_args
     target_iterations = known.target_iterations
+    if research_config_raw:
+        if known.target_iterations:
+            raise SystemExit("autoresearch uses max_experiments, including the seed; omit --target-iterations")
+        if _load_yaml(runtime_config).get("mode") != "autoresearch_pce":
+            raise SystemExit("--autoresearch-config requires mode: autoresearch_pce")
     if offline_gepa and target_iterations == 0:
         configured_target = (
             _load_yaml(runtime_config).get("search", {}).get("max_iterations")
@@ -398,6 +405,7 @@ def parse_args(argv: list[str]) -> SupervisorConfig:
         reclaim_staging=known.reclaim_staging,
         reclaim_workspaces=known.reclaim_workspaces,
         remote_staging_root=remote_staging_root,
+        autoresearch=bool(research_config_raw),
     )
 
 
@@ -573,6 +581,8 @@ from pathlib import Path
 
 run_dir = Path(os.path.expanduser(sys.argv[1]))
 controller_job_name = sys.argv[2]
+autoresearch = len(sys.argv) > 3 and sys.argv[3] == "autoresearch_pce"
+evaluation_target = int(sys.argv[4]) if autoresearch else None
 
 def active_controller_rows():
     controllers = subprocess.run(
@@ -580,6 +590,8 @@ def active_controller_rows():
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True,
     )
     if controllers.returncode != 0:
+        if autoresearch:
+            raise RuntimeError("active owner query is unavailable; do not submit a duplicate")
         return []
     return [
         line for line in controllers.stdout.splitlines()
@@ -597,6 +609,36 @@ if not run_dir.is_dir():
     }, sort_keys=True))
     sys.exit(0)
 
+def ar_status():
+    private = run_dir / "private"
+    payload = {"state": "resumable", "run_dir": str(run_dir),
+               "runtime_initialized": (private / "identity.json").is_file(),
+               "evaluation_target": evaluation_target, "completed_evaluations": 0}
+    checkpoint = private / "state.json"
+    if checkpoint.is_file():
+        saved = json.loads(checkpoint.read_text(encoding="utf-8"))
+        rounds = saved["rounds"]
+        if not isinstance(rounds, list) or [row["round"] for row in rounds] != list(range(len(rounds))):
+            raise ValueError("invalid autoresearch evaluation checkpoint")
+        # Each appended row represents a complete frozen train/validation run.
+        if any(not row.get("guide_sha256")
+               or type(row[split].get("total")) is not int or row[split]["total"] < 1
+               or type(row[split].get("resolved")) is not int
+               or not 0 <= row[split]["resolved"] <= row[split]["total"]
+               for row in rounds for split in ("train", "validation")):
+            raise ValueError("incomplete autoresearch score row")
+        payload.update(completed_evaluations=len(rounds), pending=saved.get("pending"))
+        if len(rounds) >= evaluation_target:
+            payload.update(state="result", status="completed")
+    exit_path = private / "research_exit.json"
+    if exit_path.is_file() and payload["state"] != "result":
+        owner_exit = json.loads(exit_path.read_text(encoding="utf-8"))
+        payload["research_exit"] = owner_exit.get("status")
+        if owner_exit.get("status") == "failed":
+            payload.update(state="controller_failed", error_type=owner_exit.get("error_type"),
+                           errno=owner_exit.get("errno"), failure_record=owner_exit.get("failure_record", {}))
+    return payload
+
 result_path = run_dir / "result.json"
 state_path = run_dir / "gepa_state.bin"
 manifest_path = run_dir / "run_manifest.json"
@@ -607,7 +649,13 @@ if not progress_path.is_file():
 controller_status_path = run_dir / "controller_status.json"
 payload = {"state": "missing", "run_dir": str(run_dir)}
 payload["runtime_initialized"] = manifest_path.is_file() or online_manifest_path.is_file()
-if result_path.is_file():
+if autoresearch:
+    try:
+        payload = ar_status()
+    except (ValueError, KeyError, TypeError) as exc:
+        payload = {"state": "status_check_failed", "error_type": "invalid_ar_checkpoint",
+                   "error": str(exc), "run_dir": str(run_dir)}
+elif result_path.is_file():
     try:
         result = json.loads(result_path.read_text(encoding="utf-8"))
     except Exception as exc:
@@ -622,7 +670,7 @@ elif state_path.is_file() and (manifest_path.is_file() or online_manifest_path.i
 elif state_path.is_file():
     payload = {"state": "state_without_manifest", "run_dir": str(run_dir)}
 
-if controller_status_path.is_file():
+if not autoresearch and controller_status_path.is_file():
     try:
         controller_status = json.loads(controller_status_path.read_text(encoding="utf-8"))
         payload["controller_status"] = controller_status.get("status")
@@ -638,7 +686,7 @@ if controller_status_path.is_file():
     except Exception as exc:
         payload = {"state": "invalid_controller_status", "error": str(exc), "run_dir": str(run_dir)}
 
-if progress_path.is_file():
+if not autoresearch and progress_path.is_file():
     try:
         progress = json.loads(progress_path.read_text(encoding="utf-8"))
         payload["completed_iterations"] = int(progress["completed_iterations"])
@@ -677,7 +725,10 @@ for path in (run_dir / "hpc_rollout_batches").glob("batch_*/batch_state.json"):
         continue
     if batch_state.get("active_job_id"):
         worker_ids.add(str(batch_state["active_job_id"]))
-for path in task_state_paths(run_dir):
+task_roots = [run_dir]
+if autoresearch:
+    task_roots = sorted((run_dir / "private/pce").glob("round-*"))
+for path in (path for root in task_roots for path in task_state_paths(root)):
     try:
         task_state = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
@@ -701,6 +752,9 @@ print(json.dumps(payload, sort_keys=True))
         + shlex.quote(config.remote_run_snapshot)
         + " "
         + shlex.quote(config.job_name)
+        + " " + shlex.quote("autoresearch_pce" if getattr(config, "autoresearch", False) else "existing")
+        + " " + shlex.quote(str(_load_yaml(config.runtime_config)["max_experiments"])
+                            if getattr(config, "autoresearch", False) else "0")
     )
     try:
         result = run_command(
@@ -974,6 +1028,9 @@ def run_loop(config: SupervisorConfig) -> int:
 
     with _supervisor_lock(config):
         state = _load_supervisor_state(config)
+        # A retired/completed service must not recreate a deleted old run.
+        if state.get("status") in {"completed", "iteration_target_reached"}:
+            return 0
         print(
             "[hpc-resume] starting supervisor "
             f"slice_time={config.slice_time} poll_interval={config.poll_interval_seconds}s "

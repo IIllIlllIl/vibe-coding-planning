@@ -1,0 +1,27 @@
+# Prepared recovery binding; launch still requires a reviewed committed export.
+# This is 9 scored guide evaluations including seed, not 9 individual PCE cases.
+schema_version: 1
+session: autoresearch-pce-rpg-formal8-v1-20261118
+log: .local/hpc-supervisor/autoresearch-pce-rpg-formal8-v1-20261118.log
+arguments:
+- --poll-interval
+- '120'
+- --slice-time
+- 00:30:00
+- --state-file
+- .local/hpc-supervisor/autoresearch-pce-rpg-formal8-v1-20261118.json
+- --require-clean-worktree
+- --autoresearch-config
+- configs/autoresearch_pce_rpg_formal8_v1_20261118.yaml
+- --resume-source
+- /scratch/users/twang/vibe-coding-planning/run_state/operations/autoresearch-pce-rpg-formal8-v1-20261118/predecessor-942e629
+- --ulhpc-config
+- /Users/taoran.wang/.config/ulhpc-submit/config.yaml
+- --job-name
+- autoresearch-pce-rpg-formal8-v1-20261118
+- --cpus
+- '1'
+- --mem
+- 4G
+- --reclaim-staging
+- --submit
