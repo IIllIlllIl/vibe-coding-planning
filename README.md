@@ -1,19 +1,27 @@
-# Behavioral Plan Acceptability Research
+# Software Planning Guidance Research
 
-This branch is now in the **ACE + Safe PCE** stage. It develops a human-readable
-reject playbook, regenerates trustworthy Plan-Code-Evaluate evidence through
-Safe PCE, and will evaluate the selected playbook through ACE-PCCE. Earlier
-Offline GEPA, Behavioral C4/C5, quick50, safe67, and PolyBench runs are retained
-only to explain failed designs and motivate safeguards. They are not input,
-selection, image, baseline, or launch authorities for the new experiment.
+This repository studies human-readable guidance for AI software planning:
+blocking-signal checklists for repository-aware review, and planning guides
+learned from Plan-Code-Evaluate (Safe PCE) trajectories. ACE/GEPA and Agent-owned
+autoresearch reuse the same execution components with separate learning
+contracts. Historical Behavioral, Offline GEPA and PolyBench experiments remain
+available for controlled comparison and diagnosis; frozen configurations define
+which evidence a new experiment may use.
 
-The active research question has progressed from behavioral acceptance
-classification to learning which decision-time-identifiable Plan deficiencies
-justify intervention and how review feedback can improve downstream execution.
+The research asks which Plan deficiencies justify intervention and how learned
+guidance can improve planning and downstream implementation across tasks.
 Deployment-time review must not see developer reactions, later plan revisions,
 implementation trajectories, or downstream outcomes. Those post-boundary
 records may support labels, controlled Reflection evidence, and retrospective
 development analysis only.
+
+## Completed RPG learning comparison
+
+Clean GEPA20 and AR8 both reached **8/15 validation tasks resolved**, with the
+same task-level outcomes. AR reached this score earlier and selected a shorter
+guide; it did not establish a higher best result. The
+[terminal comparison](docs/knowledge/ar8-gepa20-learning-comparison-20261120.md)
+records learning histories, evaluation counts and interpretation limits.
 
 ## Historical diagnostic evidence
 
@@ -73,7 +81,7 @@ before choosing an entry point.
 - [Task-only ACE/GEPA](docs/safe-pce-ace-gepa.md) owns learning from complete
   Safe PCE trajectories. [RPG data](docs/swe-rpg-learning-data.md)
   owns the repository-disjoint training, validation and downstream holdouts.
-- [Autoresearch guide optimization](docs/codex-pce-research.md) is the active
+- [Autoresearch guide optimization](docs/codex-pce-research.md) is the
   Agent-owned research adaptation over the same fixed Safe PCE runner. Its
   superseded smoke-only script-Codex prototype is archived.
 - [Paired blocking-signal learning](docs/paired-blocking-signal-learning.md)
@@ -92,24 +100,22 @@ presence is not a new launch instruction.
 ## Historical paths
 
 Standalone Online GEPA/PCT/old-analysis documents, configs, and resource-pilot
-scripts are archived in this branch. Historical source modules and mixed shared
-entrypoints remain temporarily so dependency reachability can be measured after
-the Behavioral skeleton exists. None are active research authority or default
-search targets.
+scripts are archived. Historical modules still used by retained workflows or
+tests remain shared components; archived designs are not default search or
+launch authority.
 
 The unmodified historical baseline is commit
 `95807f9f581eb3b2fc25f2b60100e5cf2f91b9c1` on `main`. Read a historical file
 without restoring it into this branch with, for example:
 
 ```bash
-git show main:src/optimization/online_runner.py
-git show main:docs/gepa-rule-optimization.md
+git show 95807f9f581eb3b2fc25f2b60100e5cf2f91b9c1:src/optimization/online_runner.py
+git show 95807f9f581eb3b2fc25f2b60100e5cf2f91b9c1:docs/gepa-rule-optimization.md
 ```
 
-Frozen datasets and raw outputs are intentionally not duplicated by Git. This
-worktree uses Git-ignored local references to the two exact data roots in the
-main worktree: `output/SWE-bench_Verified` and `output/SWE-PolyBench`. Those
-references are local setup, never committed branch content.
+Frozen datasets and raw outputs are intentionally not duplicated by Git.
+Private local references and HPC artifact locations are setup state; tracked
+configs and manifests identify their frozen authorities.
 
 ## Environment and safe validation
 

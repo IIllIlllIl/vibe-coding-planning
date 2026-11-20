@@ -17,6 +17,8 @@ logs/
 opencode_logs/
 .tmp_hpc_smoke/
 /.local/
+# Private collaborator progress decks retained in the primary checkout.
+/Progress*.pptx
 .ulhpc_submit/
 
 # Worktree-local agent instruction files. Project authority belongs in the

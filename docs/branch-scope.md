@@ -12,8 +12,8 @@ maintained implementation supports:
    and SWE-chat hybrid learning paths, for controlled comparisons and diagnosis.
 3. PCCE and fixed-rule probes through the existing shared components, when
    explicitly selected by a reviewed experiment.
-4. Agent-owned [autoresearch guide optimization](codex-pce-research.md), under
-   active development over the same fixed Safe PCE execution path.
+4. Agent-owned [autoresearch guide optimization](codex-pce-research.md), with
+   formal-run evidence over the same fixed Safe PCE execution path.
 5. Shared Agent backends, isolation, prepared base history, evaluator adapters,
    Slurm lifecycle, retry/checkpoint, storage and evidence utilities.
 

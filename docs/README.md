@@ -20,7 +20,7 @@ Read in this order:
 | [`engineering-contracts.md`](engineering-contracts.md) | Necessary-flow whitelist; shared execution, isolation, retry/checkpoint, nonblocking diagnostics and low-file-count logging |
 | [`safe-pce.md`](safe-pce.md) | Current Safe PCE selection, execution reliability, and the frozen within-task Plan-pair derivative |
 | [`safe-pce-ace-gepa.md`](safe-pce-ace-gepa.md) | Opt-in task-only Safe PCE evaluation for the retained hybrid ACE/GEPA learner; Planner-owned application notes |
-| [`codex-pce-research.md`](codex-pce-research.md) | Active autoresearch adaptation: Agent-owned guide/PCE experiments, shared execution and held-out evidence boundaries |
+| [`codex-pce-research.md`](codex-pce-research.md) | Autoresearch adaptation: Agent-owned guide/PCE experiments, shared execution and held-out evidence boundaries |
 | [`swe-rpg-learning-data.md`](swe-rpg-learning-data.md) | Frozen RPG repository-disjoint train/validation/downstream holdouts, source-byte preservation, formal learning contract and comparison with Verified |
 | [`hpc-submit.md`](hpc-submit.md) | Behavioral-branch credential, preheat, retained Slurm, and FairShare safety |
 | [`../configs/README.md`](../configs/README.md) | Runtime-versus-launch configuration ownership and active config index |
@@ -36,6 +36,7 @@ offline GEPA, and production failures:
 
 | Document | Use when |
 |---|---|
+| [`knowledge/ar8-gepa20-learning-comparison-20261120.md`](knowledge/ar8-gepa20-learning-comparison-20261120.md) | Comparing completed AR8 and clean GEPA20 learning, evaluation cost, guide content and remaining inference limits |
 | [`knowledge/agent-budgeting.md`](knowledge/agent-budgeting.md) | Changing steps, command timeouts, phase deadlines, or Slurm limits |
 | [`knowledge/checkpoint-and-retry.md`](knowledge/checkpoint-and-retry.md) | Changing resume, retries, or batch takeover |
 | [`knowledge/blocking-policy-acceptance-20261028.md`](knowledge/blocking-policy-acceptance-20261028.md) | Whitelist-based Safe PCE/ACE audit, diagnostic-failure injection and retained integrity boundaries |

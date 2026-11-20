@@ -230,7 +230,7 @@ AR evaluates full train and validation for each submitted guide, whereas the
 GEPA comparator samples training minibatches and gates validation. Compare
 evaluation counts and wall time alongside proposal count.
 
-The [recovery Supervisor binding](../configs/autoresearch_pce_rpg_formal8_supervisor_v1_20261118.yaml)
+The [archived recovery Supervisor binding](../configs/archive/supervisor_launches/autoresearch_pce_rpg_formal8_supervisor_v1_20261118.yaml)
 uses Iris 1 CPU / 4G, 30-minute owner slices and the unchanged nine-evaluation
 budget. Already active PCE workers finish independently; the Supervisor waits
 before submitting another owner, whose Native conversation and PCE state both
@@ -238,3 +238,5 @@ resume. Worker deadlines and attempts are unchanged. There is
 no ten-hour stopping condition; partial completed guides can be analyzed while
 the experiment continues. Launch arguments and current storage checks belong
 in private operational evidence, not in the optimizer's scientific input bundle.
+The terminal [AR8 versus clean GEPA20 comparison](knowledge/ar8-gepa20-learning-comparison-20261120.md)
+records scores, evidence boundaries and the finalization recovery.

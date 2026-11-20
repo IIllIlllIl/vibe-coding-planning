@@ -13,7 +13,7 @@ lifetimes; see [the lifecycle contract](../docs/documentation-authority.md).
   The [full RPG binding](autoresearch_pce_rpg_formal8_v1_20261118.yaml) permits
   Seed plus eight updates over 46 train / 15 validation tasks (549 PCE before
   retries), with the same frozen PCE source. No config authorizes a launch.
-  Its [recovery Supervisor](autoresearch_pce_rpg_formal8_supervisor_v1_20261118.yaml)
+  Its [archived recovery Supervisor](archive/supervisor_launches/autoresearch_pce_rpg_formal8_supervisor_v1_20261118.yaml)
   uses 30-minute owner slices and the same nine complete guide evaluations.
   The [method contract](../docs/codex-pce-research.md)
   owns this Agent-controlled loop. The superseded smoke-only
@@ -43,7 +43,7 @@ lifetimes; see [the lifecycle contract](../docs/documentation-authority.md).
 ## RPG twenty-proposal whole-candidate reflection
 
 [Learning](gepa_safe_pce_rpg_codex_reflection_diag20_v1_20261106.yaml) and
-[Supervisor](safe_pce_rpg_codex_reflection_diag20_supervisor_v1_20261106.yaml)
+[Archived Supervisor](archive/supervisor_launches/safe_pce_rpg_codex_reflection_diag20_supervisor_v1_20261106.yaml)
 bind a fresh placeholder-seed run to the shared whole-candidate reflection
 runtime with Native Apps/connectors and built-in web search disabled. The
 46/15/16 split, 92 training-only reference files, prompt, seed42, mini8/window8,

@@ -98,7 +98,7 @@ def test_twenty_proposal_binding_changes_only_budget_and_identity():
     assert contract["budget"]["no_model_workspace_preparation_elements_without_retries_upper_bound"] == 1905
     assert contract["budget"]["reflection_units_upper_bound"] == 20
     from scripts.hpc_supervisor_service import _load_launch_config
-    session, _, args, script = _load_launch_config(Path("configs/safe_pce_rpg_codex_reflection_diag20_supervisor_v1_20261106.yaml"))
+    session, _, args, script = _load_launch_config(Path("configs/archive/supervisor_launches/safe_pce_rpg_codex_reflection_diag20_supervisor_v1_20261106.yaml"))
     assert session == cfg.run_dir.name
     assert args[args.index("--gepa-config") + 1] == path
     assert {"--require-clean-worktree", "--reclaim-workspaces", "--reclaim-staging", "--submit"} <= set(args)
