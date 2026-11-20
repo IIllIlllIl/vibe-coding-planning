@@ -93,8 +93,11 @@ The prompt bundle may move with a separate reporting staging root only when
 its frozen content hash matches; a changed prompt digest remains incompatible.
 
 AR uses the same local Supervisor and `hpc_submit_batch.sh
---autoresearch-config PATH`, with completion taken from `max_experiments`
-(including seed). Do not set a GEPA iteration target for AR. Short owner slices
+--autoresearch-config PATH`. `max_experiments` (including seed) limits PCE
+evaluations; completion additionally requires the Agent's final turn saved in
+`private/research_exit.json`. After all scores are saved, short owner slices
+may resume that same session to finish its log and chosen guide without any
+further PCE evaluation. Do not set a GEPA iteration target for AR. Short owner slices
 resume the explicit Native session and the pending frozen PCE evaluation;
 active nested PCE arrays are checked through the shared state enumerator before
 resubmission. Preserve the original source identity for a reviewed runtime

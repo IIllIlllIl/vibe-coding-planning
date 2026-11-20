@@ -9,12 +9,12 @@ arguments:
 - --slice-time
 - 00:30:00
 - --state-file
-- .local/hpc-supervisor/autoresearch-pce-rpg-formal8-v1-20261118-recovery-v2.json
+- .local/hpc-supervisor/autoresearch-pce-rpg-formal8-v1-20261118-recovery-v3.json
 - --require-clean-worktree
 - --autoresearch-config
 - configs/autoresearch_pce_rpg_formal8_v1_20261118.yaml
 - --resume-source
-- /scratch/users/twang/vibe-coding-planning/run_state/operations/autoresearch-pce-rpg-formal8-v1-20261118/predecessor-942e629
+- /scratch/users/twang/vibe-coding-planning/run_state/operations/autoresearch-pce-rpg-formal8-v1-20261118/predecessor-b053e3c
 - --ulhpc-config
 - /Users/taoran.wang/.config/ulhpc-submit/config.yaml
 - --job-name

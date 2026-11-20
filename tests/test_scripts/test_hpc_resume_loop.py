@@ -290,7 +290,9 @@ def test_ar_status_counts_complete_evaluations_and_finds_nested_workers(tmp_path
         {"round": index, "guide_sha256": "fixed", "train": {"resolved": counts[0], "total": 46},
          "validation": {"resolved": counts[1], "total": 15}} for index in range(completed)],
         **({"pending": {"round": completed, "guide_sha256": "frozen-guide"}} if completed < 9 else {})}))
-    (private / "research_exit.json").write_text('{"status":"agent_returned_or_interrupted"}')
+    (private / "research_exit.json").write_text(json.dumps(
+        {"status": "completed", "completed_experiments": 9, "final": "Agent final account."}
+        if completed == 9 else {"status": "agent_returned_or_interrupted"}))
     worker = private / "pce/round-0000/hpc_tasks/pce/fp/execution_windows/window_0000_0005/task_state.json"
     worker.parent.mkdir(parents=True)
     worker.write_text('{"phase":"SUBMITTED","active_job_id":"123"}')
@@ -326,23 +328,44 @@ def test_ar_status_rejects_invalid_counts_without_rewriting(tmp_path, monkeypatc
 
 
 @pytest.mark.parametrize("completed", [0, 1, 8, 9])
-@pytest.mark.parametrize("owner_exit", ["running", "failed", "budget_exhausted"])
-def test_ar_completion_uses_durable_evaluations_not_owner_exit(tmp_path, monkeypatch, completed, owner_exit):
+@pytest.mark.parametrize("owner_exit", ["running", "failed", "budget_exhausted", "completed"])
+def test_ar_completion_requires_scores_and_agent_finalization(tmp_path, monkeypatch, completed, owner_exit):
     private = tmp_path / "private"
     private.mkdir()
     (private / "state.json").write_text(json.dumps({"rounds": [
         {"round": index, "guide_sha256": "fixed", "train": {"resolved": 0.0, "total": 46},
          "validation": {"resolved": 15.0, "total": 15}} for index in range(completed)]}))
-    (private / "research_exit.json").write_text(json.dumps({"status": owner_exit, "error_type": "OSError"}))
+    (private / "research_exit.json").write_text(json.dumps({"status": owner_exit, "error_type": "OSError",
+        "completed_experiments": 9, "final": "Agent final account."}))
     status = _ar_checkpoint_status(tmp_path, monkeypatch, tmp_path)
     assert status["completed_evaluations"] == completed
-    assert resume_loop.is_completed(status) is (completed == 9)
-    if completed == 9:
+    assert resume_loop.is_completed(status) is (completed == 9 and owner_exit == "completed")
+    if completed == 9 and owner_exit == "completed":
         assert status["status"] == "completed"
     elif owner_exit == "failed":
         assert status["state"] == "controller_failed"
     else:
         assert status["state"] == "resumable"
+    if completed == 9:
+        assert status["evaluations_complete"] is True
+        assert status["phase"] == "research_finalization"
+
+
+@pytest.mark.parametrize("receipt", [
+    {"status": "completed", "completed_experiments": 1},
+    {"status": "completed", "completed_experiments": 0, "final": "Agent final account."},
+    {"status": "completed", "completed_experiments": 1, "final": ""},
+])
+def test_ar_incomplete_final_record_keeps_completed_scores_resumable(tmp_path, monkeypatch, receipt):
+    private = tmp_path / "private"
+    private.mkdir()
+    (private / "state.json").write_text(json.dumps({"rounds": [
+        {"round": 0, "guide_sha256": "fixed", "train": {"resolved": 1.0, "total": 1},
+         "validation": {"resolved": 0.0, "total": 1}}]}))
+    (private / "research_exit.json").write_text(json.dumps(receipt))
+    status = _ar_checkpoint_status(tmp_path, monkeypatch, tmp_path, budget=1)
+    assert status["evaluations_complete"] is True
+    assert status["state"] == "resumable" and not resume_loop.is_completed(status)
 
 
 def test_ar_status_reads_real_pce_scores_and_pending_resume_reuses_results(tmp_path, monkeypatch):
@@ -425,6 +448,11 @@ def test_ar_supervisor_reads_real_scores_waits_workers_and_resumes_once(tmp_path
     resumed = PCEExperiments(config, SafePCEBackend)
     result = resumed.evaluate("resume")
     assert result["guide_sha256"] == pending["guide_sha256"] and len(calls) == 5
+    scored = resume_loop.remote_run_status(supervisor)
+    assert scored["evaluations_complete"] and not resume_loop.is_completed(scored)
+    # The already submitted Owner must finish its Agent turn as well.
+    (experiments.private / "research_exit.json").write_text(json.dumps({"status": "completed",
+        "completed_experiments": 2, "final": "Recorded results and restored the selected guide."}))
     assert resume_loop.run_loop(supervisor) == 0
     assert state["status"] == "completed" and submitted == ["resumed-owner"]
     assert state["last_remote_status"]["completed_evaluations"] == 2

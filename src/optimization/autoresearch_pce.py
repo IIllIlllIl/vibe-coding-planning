@@ -182,8 +182,16 @@ def run_autoresearch(config, *, backend_factory, conversation_factory=None, resu
     _write_bytes(experiments.evidence / "program.md", config.program.read_bytes())
     _write_bytes(experiments.evidence / "pce.py", Path(__file__).with_name("autoresearch_pce_client.py").read_bytes())
     atomic_json(experiments.private / "autoresearch_provenance.json", lock)
-    if len(experiments.state["rounds"]) == experiments.budget:
-        return experiments.state["rounds"]
+    exit_path = experiments.private / "research_exit.json"
+    if len(experiments.state["rounds"]) == experiments.budget and exit_path.is_file():
+        previous = json.loads(exit_path.read_text())
+        if (previous.get("status") == "completed"
+                and previous.get("completed_experiments") == experiments.budget
+                and isinstance(previous.get("final"), str) and previous["final"].strip()):
+            return experiments.state["rounds"]
+    # A saved final score does not imply that the Agent recorded its result
+    # and restored its chosen guide before the previous allocation ended.
+    atomic_json(exit_path, {"status": "running"})
     if sha256(config.analysis_sif) != config.analysis_sif_sha256:
         raise ValueError("analysis SIF hash mismatch")
     boundary = CodexSIFExecution(config.analysis_sif, experiments.evidence,
@@ -207,9 +215,10 @@ def run_autoresearch(config, *, backend_factory, conversation_factory=None, resu
         # Reuse the existing writable output mount for command envelopes.
         # No host project, validation directory or provider source is mounted.
         with evaluation_command(experiments, agent.transport[3] / "pce-command") as service:
+            finalized = False
             try:
                 turn = 0
-                finish_pending = False
+                finish_pending = len(experiments.state["rounds"]) == experiments.budget
                 while len(experiments.state["rounds"]) < experiments.budget or finish_pending:
                     turn += 1
                     agent.attempt_dir = attempt / f"turn_{turn:04d}"
@@ -221,7 +230,9 @@ def run_autoresearch(config, *, backend_factory, conversation_factory=None, resu
                                  "when present, then continue until the approved evaluation count is reached. "
                                  "Tool process handles from an earlier allocation may no longer exist.")
                     if finish_pending:
-                        user += " The approved evaluation count is complete. Record the final completed result and finish."
+                        user += (" The approved evaluation count is complete. Record any missing completed result "
+                                 "in results.tsv, restore your chosen evaluated guide in /testbed/guide.md, "
+                                 "and finish with a short account of the results.")
                     final, trajectory = agent.call_text(
                         system="Read /evidence/program.md and carry out its autoresearch experiment.",
                         task="Conduct the authorized guide research using the fixed PCE command.",
@@ -236,13 +247,18 @@ def run_autoresearch(config, *, backend_factory, conversation_factory=None, resu
                         raise service.error
                     finish_pending = (returned_before_completion and
                                       len(experiments.state["rounds"]) == experiments.budget)
+                # Retain the Agent's exact final account in the existing
+                # lifecycle record before the Supervisor may retire this run.
+                atomic_json(exit_path, {"status": "completed",
+                    "completed_experiments": len(experiments.state["rounds"]),
+                    "pending": experiments.state.get("pending"), "final": final})
+                finalized = True
             finally:
                 with optional_diagnostic("AR Native session archive"):
                     atomic_json(attempt / "analysis-sessions.json", agent.session_evidence())
-                with optional_diagnostic("AR exit status"):
-                    atomic_json(experiments.private / "research_exit.json", {
-                        "status": "budget_exhausted" if len(experiments.state["rounds"]) == experiments.budget
-                                  else "agent_returned_or_interrupted",
-                        "completed_experiments": len(experiments.state["rounds"]),
-                        "pending": experiments.state.get("pending")})
+                if not finalized:
+                    with optional_diagnostic("AR exit status"):
+                        atomic_json(exit_path, {"status": "agent_returned_or_interrupted",
+                            "completed_experiments": len(experiments.state["rounds"]),
+                            "pending": experiments.state.get("pending")})
     return experiments.state["rounds"]

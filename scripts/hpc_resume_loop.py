@@ -631,12 +631,16 @@ def ar_status():
             raise ValueError("incomplete autoresearch score row")
         payload.update(completed_evaluations=len(rounds), pending=saved.get("pending"))
         if len(rounds) >= evaluation_target:
-            payload.update(state="result", status="completed")
+            payload.update(evaluations_complete=True, phase="research_finalization")
     exit_path = private / "research_exit.json"
-    if exit_path.is_file() and payload["state"] != "result":
+    if exit_path.is_file():
         owner_exit = json.loads(exit_path.read_text(encoding="utf-8"))
         payload["research_exit"] = owner_exit.get("status")
-        if owner_exit.get("status") == "failed":
+        if (payload.get("evaluations_complete") and owner_exit.get("status") == "completed"
+                and owner_exit.get("completed_experiments") == evaluation_target
+                and isinstance(owner_exit.get("final"), str) and owner_exit["final"].strip()):
+            payload.update(state="result", status="completed")
+        elif owner_exit.get("status") == "failed":
             payload.update(state="controller_failed", error_type=owner_exit.get("error_type"),
                            errno=owner_exit.get("errno"), failure_record=owner_exit.get("failure_record", {}))
     return payload

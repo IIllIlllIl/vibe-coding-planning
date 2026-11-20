@@ -91,13 +91,26 @@ analysis. Operationally incomplete evaluations do not become invented zeroes;
 public command failures hide held-out details, with full errors kept privately.
 
 `max_experiments` includes the seed. One evaluation means a complete frozen
-train/validation run, not one case, a Git commit or a Native turn. The existing
-local Supervisor stops at that durable count. An early Native final response
+train/validation run, not one case, a Git commit or a Native turn. Reaching that
+count exhausts PCE execution but still allows the Agent to finish its log,
+restore its chosen guide and return its final account. The existing local
+Supervisor stops after both the score checkpoint and that final Agent turn
+are saved. An early Native final response
 does not complete the experiment: the owner waits for its live PCE request,
 then continues the same conversation. A final continuation can record a result
 that finished after Native returned; it cannot consume another evaluation.
 Retries retain the existing PCE policy. PCE's existing phase and
 Slurm deadlines govern execution rather than AR's GPU-specific ten-minute kill.
+
+The existing `private/research_exit.json` stores `status: completed`, the
+completed evaluation count and the Agent's unchanged final response. It is
+written after the successful final turn, rather than inferred in an exception
+handler from the score count. If an allocation ends after the last score but
+before this record, the same Native session resumes for finalization. The PCE
+command returns `budget_exhausted`; no extra task evaluation is allowed.
+An already finalized resume retains the completion record and opens no Agent.
+TSV contents and the chosen guide remain Agent-authored and are audited after
+execution; the Host does not fill missing log rows or select a guide.
 
 Safe PCE supplies floating-point binary scores, so aggregate resolved counts
 can be stored as `29.0` rather than `29`. The Supervisor accepts either numeric

@@ -78,7 +78,6 @@ def run_research(config, *, conversation_factory=None, backend_factory=SafePCEBa
     config.run_dir.mkdir(parents=True, exist_ok=True)
     mark_private_artifact_dir(config.run_dir)
     with _controller_lock(config):
-        atomic_json(config.run_dir / "private/research_exit.json", {"status": "running"})
         try:
             return run_autoresearch(config, backend_factory=backend_factory,
                                    conversation_factory=conversation_factory, resume_source=resume_source)

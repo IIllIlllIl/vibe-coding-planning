@@ -499,3 +499,72 @@ def test_early_final_with_running_pce_waits_then_finishes_without_duplicate(tmp_
             return "Recorded the completed result.", []
     assert len(run_research(config, conversation_factory=Agent)) == 1
     assert len(turns) == 2 and len(calls) == 2
+
+
+@pytest.mark.parametrize("first_failure", [None, "agent_interruption", "completion_save"])
+def test_full_budget_resumes_only_agent_finalization_and_then_stays_completed(tmp_path, monkeypatch, first_failure):
+    config = replace(config_for(tmp_path), max_experiments=1)
+    calls = _executor(monkeypatch)
+    experiments = ar.PCEExperiments(config, SafePCEBackend)
+    experiments.evaluate("evaluate")
+    checkpoint = experiments.private / "state.json"
+    original = checkpoint.read_bytes()
+    guide = (experiments.evidence / "guides/0000.md").read_bytes()
+    # Model the previous Owner dying after the final score was saved.
+    (experiments.private / "research_exit.json").write_text('{"status":"running"}')
+    turns = []
+    class Agent:
+        def __init__(self, *, container, session_dir, **kwargs):
+            self.container = container
+            self.session_id = "original-research-session"
+            assert session_dir == experiments.private / "native-session"
+            self.temp = tempfile.TemporaryDirectory()
+            self.transport = (None, None, None, Path(self.temp.name))
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            self.temp.cleanup()
+        def session_evidence(self):
+            return []
+        def call_text(self, **kwargs):
+            turns.append(kwargs)
+            assert "count is complete" in kwargs["user"]
+            assert "results.tsv" in kwargs["user"]
+            assert command(self.transport[3] / "pce-command")["status"] == "budget_exhausted"
+            if first_failure == "agent_interruption" and len(turns) == 1:
+                raise InterruptedError("finalization slice ended")
+            # Only the Agent authors its log, chosen guide and final account.
+            (self.container.repository_dir / "results.tsv").write_text(
+                "commit\ttrain_score\tval_score\tstatus\tdescription\n"
+                "seed\t0.0\t1.0\tkeep\tRetain the evaluated seed\n")
+            (self.container.repository_dir / "guide.md").write_bytes(guide)
+            return "Recorded the final result and retained the evaluated seed.", []
+    save = ar.atomic_json
+    if first_failure == "completion_save":
+        def fail_completion(path, value):
+            if Path(path).name == "research_exit.json" and value.get("status") == "completed":
+                raise OSError("finalization completion save failed")
+            return save(path, value)
+        monkeypatch.setattr(ar, "atomic_json", fail_completion)
+    if first_failure:
+        expected = InterruptedError if first_failure == "agent_interruption" else OSError
+        with pytest.raises(expected, match="finalization"):
+            run_research(config, conversation_factory=Agent)
+        failed = json.loads((experiments.private / "research_exit.json").read_text())
+        assert failed["status"] == "failed"
+        assert checkpoint.read_bytes() == original and len(calls) == 2
+        monkeypatch.setattr(ar, "atomic_json", save)
+    assert len(run_research(config, conversation_factory=Agent)) == 1
+    completed = json.loads((experiments.private / "research_exit.json").read_text())
+    assert completed["status"] == "completed"
+    assert completed["completed_experiments"] == 1
+    assert completed["final"] == "Recorded the final result and retained the evaluated seed."
+    assert checkpoint.read_bytes() == original and len(calls) == 2
+    assert (experiments.evidence / "guides/0000.md").read_bytes() == guide
+    assert (experiments.workspace / "results.tsv").exists()
+    assert len(turns) == 1 + int(first_failure is not None)
+    def forbidden(**kwargs):
+        pytest.fail("a finalized run must not reopen the Agent")
+    assert len(run_research(config, conversation_factory=forbidden)) == 1
+    assert json.loads((experiments.private / "research_exit.json").read_text()) == completed
+    assert checkpoint.read_bytes() == original and len(calls) == 2
